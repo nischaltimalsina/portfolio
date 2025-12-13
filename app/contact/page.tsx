@@ -1,5 +1,13 @@
 "use client"
 import { Button } from "@/components/ui/button"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+} from "@/components/ui/field"
+
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowUpRightIcon } from "@heroicons/react/24/outline"
@@ -16,12 +24,53 @@ export default function Page() {
   const ENTRY_MESSAGE = "entry.1086330122"
 
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<{
+    name?: string
+    email?: string
+    message?: string
+  }>({})
+
+  const validateForm = (formData: FormData) => {
+    const newErrors: typeof errors = {}
+
+    const name = formData.get(ENTRY_NAME) as string
+    const email = formData.get(ENTRY_EMAIL) as string
+    const message = formData.get(ENTRY_MESSAGE) as string
+
+    if (!name?.trim()) {
+      newErrors.name = "Full name is required"
+    } else if (name.trim().length < 2) {
+      newErrors.name = "Full name must be at least 2 characters"
+    }
+
+    if (!email?.trim()) {
+      newErrors.email = "Email address is required"
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Please enter a valid email address"
+    }
+
+    if (!message?.trim()) {
+      newErrors.message = "Message is required"
+    } else if (message.trim().length < 10) {
+      newErrors.message = "Message must be at least 10 characters"
+    }
+
+    return newErrors
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLoading(true)
+    setErrors({})
 
     const formData = new FormData(event.target as HTMLFormElement)
+    const validationErrors = validateForm(formData)
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      setLoading(false)
+      return
+    }
 
     try {
       await fetch(GOOGLE_FORM_ACTION_URL, {
@@ -89,28 +138,50 @@ export default function Page() {
         </p>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Input
-            type="text"
-            name={ENTRY_NAME}
-            placeholder="Your Name"
-            required
-            className="h-10"
-          />
-          <Input
-            type="email"
-            name={ENTRY_EMAIL}
-            placeholder="Email Address"
-            required
-            className="h-10"
-          />
-          <Textarea
-            name={ENTRY_MESSAGE}
-            placeholder="Your Message"
-            required
-            rows={5}
-            className="bg-accent min-h-32"
-          />
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-4"
+          noValidate
+        >
+          <FieldSet>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="name">Full Name</FieldLabel>
+                <Input
+                  id="name"
+                  type="text"
+                  name={ENTRY_NAME}
+                  placeholder="Full Name"
+                  className="h-10"
+                />
+                {errors.name && <FieldError>{errors.name}</FieldError>}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="email">Email Address</FieldLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  name={ENTRY_EMAIL}
+                  placeholder="Email Address"
+                  className="h-10"
+                />
+                {errors.email && <FieldError>{errors.email}</FieldError>}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="message">
+                  What do you want to talk about?
+                </FieldLabel>
+                <Textarea
+                  id="message"
+                  name={ENTRY_MESSAGE}
+                  placeholder="What do you want to talk about?"
+                  rows={5}
+                  className="bg-accent min-h-32"
+                />
+                {errors.message && <FieldError>{errors.message}</FieldError>}
+              </Field>
+            </FieldGroup>
+          </FieldSet>
           <Button
             size={"lg"}
             type="submit"
