@@ -24,6 +24,7 @@ export function ThemeSwitcher({
         size="icon-lg"
         variant="outline"
         aria-label="Switch theme"
+        className="backdrop-blur-xs"
         {...props}
       />
     )
@@ -39,6 +40,7 @@ export function ThemeSwitcher({
       size={size}
       variant={variant}
       aria-label="Switch theme"
+      className="backdrop-blur-xs"
       onClick={toggleTheme}
       {...props}
     >

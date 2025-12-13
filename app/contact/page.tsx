@@ -1,10 +1,43 @@
+"use client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowUpRightIcon } from "@heroicons/react/24/outline"
 import Link from "next/link"
+import { useState } from "react"
+import { toast } from "sonner"
 
 export default function Page() {
+  const GOOGLE_FORM_ACTION_URL =
+    "https://docs.google.com/forms/u/0/d/e/1FAIpQLSc5NU5SjyURVp6_Ea9Q6pgSQYWlTC2851mGBHZsPphgx8cCzQ/formResponse"
+
+  const ENTRY_NAME = "entry.2015565821"
+  const ENTRY_EMAIL = "entry.600547022"
+  const ENTRY_MESSAGE = "entry.1086330122"
+
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setLoading(true)
+
+    const formData = new FormData(event.target as HTMLFormElement)
+
+    try {
+      await fetch(GOOGLE_FORM_ACTION_URL, {
+        method: "POST",
+        mode: "no-cors",
+        body: formData,
+      })
+      setLoading(false)
+      ;(event.target as HTMLFormElement).reset()
+      toast.success("Message sent successfully!")
+    } catch (error) {
+      console.error("Submission error:", error)
+      setLoading(false)
+      toast.error("Failed to send message. Please try again.")
+    }
+  }
   return (
     <section className="py-24">
       <div className="group mx-auto h-full w-full max-w-3xl p-4 pt-6">
@@ -56,27 +89,23 @@ export default function Page() {
         </p>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
-        <form
-          action="https://formspree.io/f/mnqyojwp"
-          method="POST"
-          className="flex flex-col gap-4"
-        >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
             type="text"
-            name="name"
+            name={ENTRY_NAME}
             placeholder="Your Name"
             required
             className="h-10"
           />
           <Input
             type="email"
-            name="email"
-            placeholder="Your Email"
+            name={ENTRY_EMAIL}
+            placeholder="Email Address"
             required
             className="h-10"
           />
           <Textarea
-            name="message"
+            name={ENTRY_MESSAGE}
             placeholder="Your Message"
             required
             rows={5}
@@ -86,8 +115,9 @@ export default function Page() {
             size={"lg"}
             type="submit"
             className="h-10 self-start hover:bg-orange-500"
+            disabled={loading}
           >
-            Send Message
+            {loading ? "Sending..." : "Send Message"}
           </Button>
         </form>
       </div>

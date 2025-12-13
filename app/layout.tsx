@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Urbanist } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/providers/theme-provider"
 import { Header } from "@/components/navigation/header"
@@ -7,7 +7,7 @@ import { Footer } from "@/components/navigation/footer"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Toaster } from "sonner"
 
-const jetbrainsMono = JetBrains_Mono({
+const urbanist = Urbanist({
   subsets: ["latin"],
   variable: "--font-sans",
 })
@@ -33,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={jetbrainsMono.variable}>
+    <html lang="en" suppressHydrationWarning className={urbanist.variable}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} relative scroll-smooth antialiased`}
       >
