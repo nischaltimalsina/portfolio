@@ -1,0 +1,272 @@
+---
+title: "AI Won't Replace Developers (But It Will Change How We Work)"
+excerpt: "After using ChatGPT and Claude for 6 months in my projects, here's what AI is actually good for—and what it still can't do."
+date: "2025-03-20"
+author: "Nischal Timalsina"
+tags: ["ai", "opinion", "development", "tools"]
+published: true
+---
+
+# AI Won't Replace Developers (But It Will Change How We Work)
+
+Everyone's either panicking that AI will take our jobs or hyping it as the solution to everything. After actually using it daily, the truth is more nuanced.
+
+## What AI Is Actually Good For
+
+### 1. Boilerplate Code
+
+I used to spend 20 minutes writing a CRUD API. Now I ask Claude:
+
+> "Create a Next.js API route for managing appointments with GET, POST, PATCH, DELETE"
+
+And it gives me a solid starting point. Then I modify it for my needs.
+
+**Time saved:** ~15 minutes per endpoint
+
+### 2. Learning New Libraries
+
+Before AI:
+- Read docs for 30 minutes
+- Google examples
+- Copy-paste from StackOverflow
+- Debug for hours
+
+With AI:
+- "How do I use Zod to validate this data structure?"
+- Get working example in 2 minutes
+- Adjust as needed
+
+**This is huge for learning.**
+
+### 3. Explaining Code
+
+Got someone else's messy code?
+
+```tsx
+// What does this even do?
+const x = data.reduce((a, b) => ({
+  ...a,
+  [b.id]: [...(a[b.id] || []), b]
+}), {})
+```
+
+Ask AI: "Explain this code"
+
+> "This groups an array of objects by their id property into an object where keys are ids and values are arrays of objects with that id."
+
+**Game changer for working with legacy code.**
+
+### 4. Debugging
+
+I paste my error message and relevant code. AI often spots the issue faster than I would.
+
+Not because it's smarter, but because it's not tired or biased by what I *think* should work.
+
+### 5. Writing Tests
+
+I hate writing tests. AI makes it bearable.
+
+Me: "Write tests for this function"
+
+```tsx
+function calculateDiscount(price: number, isReturning: boolean) {
+  return isReturning ? price * 0.9 : price
+}
+```
+
+AI gives me test cases I wouldn't have thought of:
+- Normal cases
+- Edge cases (price = 0, negative price)
+- Type edge cases
+
+I still review and adjust, but it's a great starting point.
+
+## What AI Sucks At
+
+### 1. Understanding Context
+
+AI doesn't know:
+- Your business requirements
+- Why you chose this architecture
+- What "fast enough" means for your app
+- Your users' actual needs
+
+I asked it to optimize a function. It made it 10x faster but also 10x more complex. For my use case (runs once per page load), simpler was better.
+
+**AI optimizes for the wrong thing if you don't guide it.**
+
+### 2. System Design
+
+Try asking AI to design your entire app architecture. You'll get generic advice that doesn't account for:
+- Your scale (100 users vs 100,000)
+- Your team size
+- Your deployment constraints
+- Your actual problems
+
+It'll suggest Kubernetes when you need a $12 DigitalOcean droplet.
+
+### 3. Product Decisions
+
+AI can't tell you:
+- What features to build
+- What users actually want
+- How to prioritize
+- When "good enough" is good enough
+
+These require talking to actual users and making judgment calls.
+
+### 4. Debugging Complex Issues
+
+Simple bugs? AI is great.
+
+Complex bugs involving:
+- Race conditions
+- Memory leaks
+- Weird browser behavior
+- Production-only issues
+
+AI guesses. You need to actually understand your code.
+
+### 5. Knowing What to Build
+
+The hardest part of development isn't writing code—it's knowing what to build.
+
+AI can help you build faster. It can't tell you what's worth building.
+
+## How I Actually Use AI
+
+### Morning Workflow
+
+1. **Planning** - I decide what to build (AI can't do this)
+2. **Research** - Ask AI about libraries/approaches
+3. **Scaffold** - AI generates boilerplate
+4. **Build** - I write the actual logic (with AI help for tricky parts)
+5. **Debug** - AI helps spot issues
+6. **Test** - AI helps write tests
+
+AI is my junior developer who's really fast at typing but needs direction.
+
+### Real Example
+
+**Task:** Add SMS notifications to appointment booking
+
+**Without AI:** ~4 hours
+1. Research SMS providers (30 min)
+2. Read Twilio docs (30 min)
+3. Write integration code (1 hour)
+4. Handle errors (1 hour)
+5. Write tests (1 hour)
+6. Debug weird issues (30 min)
+
+**With AI:** ~2 hours
+1. "Which SMS provider works in Nepal?" (5 min)
+2. "Show me Twilio integration in Next.js" (5 min)
+3. Modify their code for my use case (30 min)
+4. "Write error handling for this" (10 min)
+5. "Write tests for SMS sending" (10 min)
+6. Debug (still takes time) (1 hour)
+
+**Time saved: 50%**
+
+But I still needed to:
+- Decide we needed SMS
+- Choose when to send messages
+- Design the user experience
+- Understand the integration
+- Debug production issues
+
+## The Real Shift
+
+AI isn't replacing developers. It's changing what we spend time on.
+
+**Before AI:**
+- 20% thinking
+- 80% typing/googling/debugging
+
+**With AI:**
+- 40% thinking
+- 60% typing/debugging
+
+**This is good.** More time for:
+- Understanding the problem
+- Designing solutions
+- Talking to users
+- Making good decisions
+
+Less time for:
+- Boilerplate
+- Googling syntax
+- Copy-pasting from docs
+
+## For New Developers
+
+**Concern:** "Should I learn to code if AI can do it?"
+
+**Answer:** Absolutely yes.
+
+AI is a tool, like Stack Overflow or Google. It makes you faster, but you need to know:
+- What questions to ask
+- How to evaluate answers
+- When the answer is wrong
+- How to fix it when it breaks
+
+**Analogy:** Calculators didn't make math useless. They made mathematicians more productive.
+
+## For Companies
+
+If you're hiring, don't ask:
+- "Can they code without AI?"
+
+Ask:
+- "Can they build the right thing?"
+- "Do they understand the tools?"
+- "Can they debug when things break?"
+- "Do they make good decisions?"
+
+The best developers are those who use every tool available—including AI.
+
+## My Prediction
+
+**In 5 years:**
+- AI will be like Google—everyone uses it, nobody thinks twice
+- Junior devs will be 2x more productive
+- Senior devs will be 1.5x more productive (they're already fast)
+- Companies will expect faster delivery
+- The skill gap will be in decision-making, not coding
+
+**What won't change:**
+- Understanding users
+- Making trade-offs
+- Debugging complex systems
+- Knowing what to build
+- Working with people
+
+## Hot Take
+
+AI might actually make developers *more* valuable, not less.
+
+**Why?**
+
+Because now the bottleneck isn't coding speed—it's knowing what to build and why.
+
+Companies that thought they just needed "coders" will realize they need people who can:
+- Understand business problems
+- Design solutions
+- Make good trade-offs
+- Ship reliable software
+
+These skills are harder to replace than code generation.
+
+## Bottom Line
+
+**Use AI.** It's a productivity multiplier.
+
+**Don't rely on AI.** You still need to understand what you're building.
+
+**Embrace it.** Developers who use AI will outperform those who don't.
+
+**But remember:** AI is a tool. Your judgment, creativity, and understanding of users—that's still on you.
+
+The future isn't "AI or developers." It's "AI-empowered developers building better software, faster."
+
+And honestly? That's pretty exciting.

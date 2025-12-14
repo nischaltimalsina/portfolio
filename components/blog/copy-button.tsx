@@ -9,12 +9,10 @@ import {
   CheckIcon,
 } from "@heroicons/react/24/outline"
 
-export default function CopyButton(
-  props: ButtonProps & { children: string | React.ReactNode }
-) {
+export default function CopyButton(props: ButtonProps & { content: string }) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopyCode = async (code: string | React.ReactNode) => {
+  const handleCopyCode = async (code: string) => {
     if (typeof code === "string") {
       try {
         await navigator.clipboard.writeText(code)
@@ -31,7 +29,7 @@ export default function CopyButton(
       variant="ghost"
       size="icon-xs"
       className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
-      onClick={() => handleCopyCode(String(props.children))}
+      onClick={() => handleCopyCode(props.content)}
       aria-label={copied ? "Copied to clipboard" : "Copy code to clipboard"}
     >
       {copied ? (

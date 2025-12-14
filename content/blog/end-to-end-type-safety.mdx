@@ -1,0 +1,567 @@
+---
+title: "End-to-End Type Safety: From Database to UI in a TypeScript Stack"
+excerpt: "How to achieve complete type safety across your full stack application using TypeScript, Zod, and code generation. No more runtime surprises or API mismatches."
+date: "2025-03-28"
+author: "Nischal Timalsina"
+tags: ["typescript", "type-safety", "zod", "api-design"]
+published: true
+---
+
+# End-to-End Type Safety: From Database to UI in a TypeScript Stack
+
+One of the most frustrating bugs in web development? When your frontend expects `userId` but the backend sends `user_id`. Or when a field that was required becomes optional, and nobody notices until production crashes.
+
+After building Appointree's full stack in TypeScript, I've developed a system where **type errors are caught at compile time, not runtime.**
+
+## The Problem with Partial Type Safety
+
+Many apps have type safety in the frontend OR the backend, but lose it at the boundaries:
+
+```typescript
+// Frontend types (manually maintained)
+interface User {
+  id: string
+  name: string
+  email: string
+}
+
+// Backend returns (no validation)
+app.get('/api/users/:id', async (req, res) => {
+  const user = await db.users.findOne({ _id: req.params.id })
+  res.json(user) // Hope it matches User interface! 🤞
+})
+
+// Frontend assumes type (dangerous!)
+const response = await fetch(`/api/users/${id}`)
+const user: User = await response.json() // Type assertion = hope
+```
+
+**Problems:**
+- Types can drift between frontend and backend
+- No validation that API response matches type
+- Refactoring one side breaks the other
+- No autocomplete for API endpoints
+
+## The Solution: Single Source of Truth
+
+My approach uses **schemas** as the single source of truth:
+
+```
+Zod Schema → TypeScript Types → API Validation → Frontend Types
+```
+
+### 1. Define Schemas with Zod
+
+```typescript
+// lib/validations/user.schema.ts
+import { z } from 'zod'
+
+// Base schema for database model
+export const UserSchema = z.object({
+  _id: z.string(),
+  tenantId: z.string(),
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: z.enum(['owner', 'admin', 'staff', 'customer']),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+// Infer TypeScript type from schema
+export type User = z.infer<typeof UserSchema>
+
+// Schema for creating a user (no _id, dates)
+export const CreateUserSchema = UserSchema.omit({
+  _id: true,
+  createdAt: true,
+  updatedAt: true,
+})
+
+export type CreateUserInput = z.infer<typeof CreateUserSchema>
+
+// Schema for updating (all fields optional except _id)
+export const UpdateUserSchema = UserSchema.partial().required({ _id: true })
+
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>
+```
+
+
+> With Zod, types flow FROM the schema, not the other way around. Change the schema, and TypeScript immediately knows.
+
+
+### 2. Validate in API Routes
+
+```typescript
+// app/api/users/route.ts
+import { NextRequest } from 'next/server'
+import { CreateUserSchema } from '@/lib/validations/user.schema'
+import { getTenantContext } from '@/lib/auth'
+
+export async function POST(req: NextRequest) {
+  const { tenantId } = await getTenantContext()
+
+  // Parse and validate request body
+  const body = await req.json()
+  const validationResult = CreateUserSchema.safeParse(body)
+
+  if (!validationResult.success) {
+    return Response.json(
+      { error: 'Invalid input', details: validationResult.error.format() },
+      { status: 400 }
+    )
+  }
+
+  // validationResult.data is now fully typed and validated!
+  const userData = validationResult.data
+
+  const user = await db.users.create({
+    ...userData,
+    tenantId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+
+  // Return validated data
+  return Response.json(UserSchema.parse(user))
+}
+```
+
+### 3. Type-Safe API Client
+
+Create a typed API client:
+
+```typescript
+// lib/api/users.ts
+import { User, CreateUserInput, UpdateUserInput } from '@/lib/validations/user.schema'
+
+export const usersApi = {
+  async list(): Promise<User[]> {
+    const res = await fetch('/api/users')
+    if (!res.ok) throw new Error('Failed to fetch users')
+    return res.json()
+  },
+
+  async get(id: string): Promise<User> {
+    const res = await fetch(`/api/users/${id}`)
+    if (!res.ok) throw new Error('Failed to fetch user')
+    return res.json()
+  },
+
+  async create(data: CreateUserInput): Promise<User> {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('Failed to create user')
+    return res.json()
+  },
+
+  async update(data: UpdateUserInput): Promise<User> {
+    const res = await fetch(`/api/users/${data._id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('Failed to update user')
+    return res.json()
+  },
+}
+```
+
+### 4. Type-Safe React Hooks
+
+```typescript
+// hooks/use-users.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { usersApi } from '@/lib/api/users'
+import type { CreateUserInput, UpdateUserInput } from '@/lib/validations/user.schema'
+
+export function useUsers() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.list,
+  })
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: CreateUserInput) => usersApi.create(data),
+    //                 ^^^^^^^^^^^^^^^^ TypeScript validates this!
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+}
+```
+
+### 5. Type-Safe Forms
+
+```typescript
+// components/user-form.tsx
+'use client'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { CreateUserSchema, type CreateUserInput } from '@/lib/validations/user.schema'
+import { useCreateUser } from '@/hooks/use-users'
+
+export function UserForm() {
+  const createUser = useCreateUser()
+
+  const form = useForm<CreateUserInput>({
+    resolver: zodResolver(CreateUserSchema),
+    defaultValues: {
+      email: '',
+      name: '',
+      role: 'customer',
+      tenantId: '', // Auto-populated from context
+    },
+  })
+
+  async function onSubmit(data: CreateUserInput) {
+    try {
+      await createUser.mutateAsync(data)
+      form.reset()
+      toast.success('User created!')
+    } catch (error) {
+      toast.error('Failed to create user')
+    }
+  }
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      <Input
+        {...form.register('name')}
+        error={form.formState.errors.name?.message}
+      />
+      <Input
+        {...form.register('email')}
+        type="email"
+        error={form.formState.errors.email?.message}
+      />
+      <Select {...form.register('role')}>
+        <option value="customer">Customer</option>
+        <option value="staff">Staff</option>
+        <option value="admin">Admin</option>
+      </Select>
+      <Button type="submit" loading={createUser.isPending}>
+        Create User
+      </Button>
+    </form>
+  )
+}
+```
+
+## Advanced Patterns
+
+### 1. Discriminated Unions for Complex Types
+
+```typescript
+// Different appointment types have different fields
+export const AppointmentBaseSchema = z.object({
+  _id: z.string(),
+  tenantId: z.string(),
+  customerId: z.string(),
+  startTime: z.date(),
+  endTime: z.date(),
+})
+
+export const InPersonAppointmentSchema = AppointmentBaseSchema.extend({
+  type: z.literal('in-person'),
+  locationId: z.string(),
+  roomId: z.string().optional(),
+})
+
+export const VirtualAppointmentSchema = AppointmentBaseSchema.extend({
+  type: z.literal('virtual'),
+  meetingLink: z.string().url(),
+  platform: z.enum(['zoom', 'teams', 'meet']),
+})
+
+export const AppointmentSchema = z.discriminatedUnion('type', [
+  InPersonAppointmentSchema,
+  VirtualAppointmentSchema,
+])
+
+export type Appointment = z.infer<typeof AppointmentSchema>
+
+// TypeScript now knows which fields exist based on 'type'
+function getLocation(appointment: Appointment) {
+  if (appointment.type === 'in-person') {
+    return appointment.locationId // ✅ TypeScript knows this exists
+  } else {
+    return appointment.meetingLink // ✅ TypeScript knows this exists
+  }
+}
+```
+
+### 2. Transform and Refine
+
+```typescript
+export const AppointmentCreateSchema = z.object({
+  customerId: z.string(),
+  serviceId: z.string(),
+  startTime: z.string().transform((val) => new Date(val)),
+  providerId: z.string(),
+}).refine(
+  (data) => {
+    const start = data.startTime
+    const now = new Date()
+    return start > now
+  },
+  { message: 'Appointment must be in the future', path: ['startTime'] }
+).refine(
+  (data) => {
+    const hour = data.startTime.getHours()
+    return hour >= 9 && hour < 17
+  },
+  { message: 'Appointments must be between 9 AM and 5 PM', path: ['startTime'] }
+)
+```
+
+### 3. Nested Object Validation
+
+```typescript
+export const AddressSchema = z.object({
+  street: z.string().min(1),
+  city: z.string().min(1),
+  state: z.string().length(2),
+  zip: z.string().regex(/^\d{5}(-\d{4})?$/),
+})
+
+export const BusinessProfileSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  address: AddressSchema,
+  phone: z.string().regex(/^\+?1?\d{10,14}$/),
+  email: z.string().email(),
+  businessHours: z.array(z.object({
+    dayOfWeek: z.number().min(0).max(6),
+    openTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    closeTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  })),
+})
+```
+
+### 4. Reusable Schema Fragments
+
+```typescript
+// Common fields across entities
+const TimestampSchema = z.object({
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+const TenantScopedSchema = z.object({
+  tenantId: z.string(),
+})
+
+// Compose schemas
+export const AppointmentSchema = z.object({
+  _id: z.string(),
+  customerId: z.string(),
+  // ... other fields
+}).merge(TimestampSchema).merge(TenantScopedSchema)
+```
+
+## Database Integration
+
+### MongoDB with Mongoose
+
+```typescript
+import mongoose from 'mongoose'
+import { User, UserSchema } from '@/lib/validations/user.schema'
+
+const userMongooseSchema = new mongoose.Schema<User>({
+  email: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  role: {
+    type: String,
+    enum: ['owner', 'admin', 'staff', 'customer'],
+    required: true
+  },
+  tenantId: { type: String, required: true, index: true },
+}, { timestamps: true })
+
+// Validate before saving
+userMongooseSchema.pre('save', function(next) {
+  const validationResult = UserSchema.safeParse(this.toObject())
+  if (!validationResult.success) {
+    next(new Error('Validation failed'))
+  } else {
+    next()
+  }
+})
+
+export const UserModel = mongoose.model('User', userMongooseSchema)
+```
+
+## Error Handling
+
+### Standardized API Errors
+
+```typescript
+// lib/api/errors.ts
+import { z } from 'zod'
+
+export class APIError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string
+  ) {
+    super(message)
+    this.name = 'APIError'
+  }
+}
+
+export function handleValidationError(error: z.ZodError): Response {
+  return Response.json(
+    {
+      error: 'Validation failed',
+      details: error.format(),
+    },
+    { status: 400 }
+  )
+}
+
+export function handleAPIError(error: unknown): Response {
+  if (error instanceof APIError) {
+    return Response.json(
+      { error: error.message, code: error.code },
+      { status: error.status }
+    )
+  }
+
+  if (error instanceof z.ZodError) {
+    return handleValidationError(error)
+  }
+
+  console.error('Unexpected error:', error)
+  return Response.json(
+    { error: 'Internal server error' },
+    { status: 500 }
+  )
+}
+```
+
+### Type-Safe Error Responses
+
+```typescript
+// In API route
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const data = CreateUserSchema.parse(body) // Throws ZodError if invalid
+
+    const user = await createUser(data)
+    return Response.json(UserSchema.parse(user))
+  } catch (error) {
+    return handleAPIError(error)
+  }
+}
+```
+
+## Testing Benefits
+
+Type safety makes tests more robust:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { CreateUserSchema } from '@/lib/validations/user.schema'
+
+describe('User validation', () => {
+  it('should validate correct user data', () => {
+    const validUser = {
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'customer' as const,
+      tenantId: 'tenant-123',
+    }
+
+    const result = CreateUserSchema.safeParse(validUser)
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject invalid email', () => {
+    const invalidUser = {
+      email: 'not-an-email',
+      name: 'Test User',
+      role: 'customer' as const,
+      tenantId: 'tenant-123',
+    }
+
+    const result = CreateUserSchema.safeParse(invalidUser)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].path).toEqual(['email'])
+    }
+  })
+})
+```
+
+## Performance Considerations
+
+### 1. Parse vs SafeParse
+
+```typescript
+// parse() throws on error (use in try-catch)
+const data = CreateUserSchema.parse(body)
+
+// safeParse() returns result object (no throw)
+const result = CreateUserSchema.safeParse(body)
+if (!result.success) {
+  // Handle error
+}
+```
+
+### 2. Lazy Validation
+
+```typescript
+// Only validate when needed
+const LazyUserSchema = z.lazy(() => UserSchema)
+```
+
+### 3. Preprocessing
+
+```typescript
+// Transform before validation
+const TrimmedEmailSchema = z.string()
+  .transform(val => val.trim().toLowerCase())
+  .pipe(z.string().email())
+```
+
+## Migration Strategy
+
+Moving to full type safety:
+
+1. **Start with new features** – don't rewrite everything
+2. **Add schemas incrementally** – one endpoint at a time
+3. **Use `safeParse` initially** – don't break existing code
+4. **Gradually remove type assertions** – as schemas are added
+5. **Add E2E tests** – verify type safety works end-to-end
+
+## Conclusion
+
+End-to-end type safety transforms how you build applications:
+
+**Before:**
+- Runtime errors in production
+- Constant type mismatches between frontend and backend
+- Fear of refactoring
+- Manual API documentation
+
+**After:**
+- Compile-time error catching
+- Single source of truth for types
+- Confident refactoring
+- Self-documenting APIs
+
+
+> The upfront cost of setting up schemas pays dividends every single day. In my projects, I catch dozens of bugs at compile time that would have been production incidents.
+
+
+Type safety isn't just about preventing bugs – it's about building systems you can reason about and change with confidence.

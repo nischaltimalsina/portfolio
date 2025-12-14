@@ -1,0 +1,378 @@
+---
+title: "React Hooks I Actually Use: A Practical Guide"
+excerpt: "Forget the 20+ hooks in the docs. Here are the 5 React hooks I use daily, with real examples and when to reach for each one."
+date: "2024-04-15"
+author: "Nischal Timalsina"
+tags: ["react", "hooks", "javascript", "web-development"]
+published: true
+---
+
+# React Hooks I Actually Use: A Practical Guide
+
+React has like 20+ hooks. I use maybe 5 of them regularly. Here's what actually matters.
+
+## The Essential 5
+
+### 1. useState - Managing Component State
+
+The most basic hook. Use it when your component needs to remember something.
+
+```tsx
+function BookingForm() {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [date, setDate] = useState('')
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    console.log({ name, phone, date })
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Your name"
+      />
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="Phone number"
+      />
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+      />
+      <button>Book Appointment</button>
+    </form>
+  )
+}
+```
+
+**When to use:** Literally any time your component needs to track something that changes.
+
+### 2. useEffect - Side Effects
+
+Run code when component mounts or when dependencies change.
+
+```tsx
+function AppointmentList() {
+  const [appointments, setAppointments] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchAppointments() {
+      const response = await fetch('/api/appointments')
+      const data = await response.json()
+      setAppointments(data)
+      setLoading(false)
+    }
+
+    fetchAppointments()
+  }, []) // Empty array = run once on mount
+
+  if (loading) return <div>Loading...</div>
+
+  return (
+    <ul>
+      {appointments.map(apt => (
+        <li key={apt.id}>{apt.customerName} - {apt.date}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+**Common patterns:**
+
+```tsx
+// Run on mount only
+useEffect(() => {
+  console.log('Component mounted')
+}, [])
+
+// Run when count changes
+useEffect(() => {
+  console.log('Count changed to:', count)
+}, [count])
+
+// Cleanup function
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log('tick')
+  }, 1000)
+
+  return () => clearInterval(timer) // Cleanup
+}, [])
+```
+
+### 3. useRef - Accessing DOM Elements
+
+Need to grab a DOM element? Use useRef.
+
+```tsx
+function SearchInput() {
+  const inputRef = useRef(null)
+
+  const focusInput = () => {
+    inputRef.current?.focus()
+  }
+
+  return (
+    <div>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus Input</button>
+    </div>
+  )
+}
+```
+
+**Also useful for:** Storing values that don't trigger re-renders.
+
+```tsx
+function Timer() {
+  const [seconds, setSeconds] = useState(0)
+  const intervalRef = useRef(null)
+
+  const start = () => {
+    intervalRef.current = setInterval(() => {
+      setSeconds(s => s + 1)
+    }, 1000)
+  }
+
+  const stop = () => {
+    clearInterval(intervalRef.current)
+  }
+
+  return (
+    <div>
+      <p>Time: {seconds}s</p>
+      <button onClick={start}>Start</button>
+      <button onClick={stop}>Stop</button>
+    </div>
+  )
+}
+```
+
+### 4. useMemo - Expensive Calculations
+
+Only recalculate when dependencies change.
+
+```tsx
+function AppointmentStats({ appointments }) {
+  // This only recalculates when appointments array changes
+  const stats = useMemo(() => {
+    const total = appointments.length
+    const confirmed = appointments.filter(a => a.status === 'confirmed').length
+    const pending = appointments.filter(a => a.status === 'pending').length
+    const revenue = appointments
+      .filter(a => a.status === 'confirmed')
+      .reduce((sum, a) => sum + a.price, 0)
+
+    return { total, confirmed, pending, revenue }
+  }, [appointments])
+
+  return (
+    <div>
+      <p>Total: {stats.total}</p>
+      <p>Confirmed: {stats.confirmed}</p>
+      <p>Pending: {stats.pending}</p>
+      <p>Revenue: रू {stats.revenue}</p>
+    </div>
+  )
+}
+```
+
+**When NOT to use:** Simple operations. useMemo has overhead.
+
+```tsx
+// ❌ Don't do this - too simple
+const fullName = useMemo(() => firstName + ' ' + lastName, [firstName, lastName])
+
+// ✅ Just do this
+const fullName = firstName + ' ' + lastName
+```
+
+### 5. useCallback - Memoizing Functions
+
+Prevent functions from being recreated on every render.
+
+```tsx
+function ParentComponent() {
+  const [count, setCount] = useState(0)
+
+  // This function stays the same between renders
+  const increment = useCallback(() => {
+    setCount(c => c + 1)
+  }, [])
+
+  return <ChildComponent onIncrement={increment} />
+}
+
+// Child won't re-render unnecessarily
+const ChildComponent = memo(({ onIncrement }) => {
+  console.log('Child rendered')
+  return <button onClick={onIncrement}>+1</button>
+})
+```
+
+**Real example:**
+
+```tsx
+function SearchableList({ items }) {
+  const [query, setQuery] = useState('')
+
+  const handleSearch = useCallback((value) => {
+    setQuery(value)
+  }, [])
+
+  const filteredItems = useMemo(() => {
+    return items.filter(item =>
+      item.name.toLowerCase().includes(query.toLowerCase())
+    )
+  }, [items, query])
+
+  return (
+    <div>
+      <SearchInput onSearch={handleSearch} />
+      <List items={filteredItems} />
+    </div>
+  )
+}
+```
+
+## Custom Hooks
+
+Once you understand the basics, create your own hooks to reuse logic.
+
+```tsx
+// useLocalStorage - Sync state with localStorage
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    const saved = localStorage.getItem(key)
+    return saved ? JSON.parse(saved) : initialValue
+  })
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value))
+  }, [key, value])
+
+  return [value, setValue]
+}
+
+// Usage
+function Settings() {
+  const [theme, setTheme] = useLocalStorage('theme', 'light')
+
+  return (
+    <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  )
+}
+```
+
+Another useful one:
+
+```tsx
+// useDebounce - Delay updates
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => clearTimeout(timer)
+  }, [value, delay])
+
+  return debouncedValue
+}
+
+// Usage - Only search after user stops typing
+function SearchBar() {
+  const [searchTerm, setSearchTerm] = useState('')
+  const debouncedSearch = useDebounce(searchTerm, 500)
+
+  useEffect(() => {
+    if (debouncedSearch) {
+      // API call happens here
+      console.log('Searching for:', debouncedSearch)
+    }
+  }, [debouncedSearch])
+
+  return (
+    <input
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      placeholder="Search appointments..."
+    />
+  )
+}
+```
+
+## Common Mistakes
+
+### 1. Forgetting Dependencies
+
+```tsx
+// ❌ Wrong - missing dependency
+useEffect(() => {
+  console.log(count)
+}, [])
+
+// ✅ Correct
+useEffect(() => {
+  console.log(count)
+}, [count])
+```
+
+### 2. Putting Everything in useEffect
+
+```tsx
+// ❌ Don't do this
+function Component() {
+  const [data, setData] = useState([])
+
+  useEffect(() => {
+    const filtered = data.filter(/* ... */)
+    // More logic...
+  }, [data])
+}
+
+// ✅ Do this
+function Component() {
+  const [data, setData] = useState([])
+  const filtered = data.filter(/* ... */)
+}
+```
+
+### 3. Not Cleaning Up
+
+```tsx
+// ❌ Memory leak
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log('tick')
+  }, 1000)
+}, [])
+
+// ✅ Cleanup
+useEffect(() => {
+  const timer = setInterval(() => {
+    console.log('tick')
+  }, 1000)
+
+  return () => clearInterval(timer)
+}, [])
+```
+
+## That's It
+
+These 5 hooks (useState, useEffect, useRef, useMemo, useCallback) cover 95% of what you'll need. The rest you can learn when you actually need them.
+
+**Key takeaway:** Don't overthink it. Start with useState and useEffect. Add the others when you have a specific need.

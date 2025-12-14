@@ -1,0 +1,574 @@
+---
+title: "Building Forms in Next.js: A Simple Guide"
+excerpt: "Forms are everywhere in web apps. Here's how to build them properly in Next.js with validation, error handling, and good UX."
+date: "2025-02-10"
+author: "Nischal Timalsina"
+tags: ["nextjs", "forms", "react", "tutorial"]
+published: true
+---
+
+# Building Forms in Next.js: A Simple Guide
+
+Forms seem simple until you actually build them. Here's how to do it right.
+
+## The Basics
+
+### Simple Contact Form
+
+```tsx
+// app/contact/page.tsx
+'use client'
+
+import { useState } from 'react'
+
+export default function ContactPage() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    message: '',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const response = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    })
+
+    if (response.ok) {
+      alert('Message sent!')
+      setFormData({ name: '', email: '', message: '' })
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }))
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-4">
+      <div>
+        <label htmlFor="name">Name</label>
+        <input
+          id="name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div>
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div>
+        <label htmlFor="message">Message</label>
+        <textarea
+          id="message"
+          name="message"
+          value={formData.message}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <button type="submit">Send</button>
+    </form>
+  )
+}
+```
+
+**This works but has issues:**
+- No validation beyond `required`
+- No loading state
+- No error handling
+- Alert for success (not great UX)
+
+Let's fix these.
+
+## Better Form with Validation
+
+### Using react-hook-form + Zod
+
+```tsx
+'use client'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useState } from 'react'
+
+const schema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().regex(/^[0-9]{10}$/, 'Phone must be 10 digits'),
+  message: z.string().min(10, 'Message must be at least 10 characters'),
+})
+
+type FormData = z.infer<typeof schema>
+
+export default function ContactForm() {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  })
+
+  const onSubmit = async (data: FormData) => {
+    setIsSubmitting(true)
+    setSubmitStatus('idle')
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) throw new Error('Failed to send')
+
+      setSubmitStatus('success')
+      reset()
+    } catch (error) {
+      setSubmitStatus('error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-md mx-auto space-y-4">
+      {submitStatus === 'success' && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+          Message sent successfully!
+        </div>
+      )}
+
+      {submitStatus === 'error' && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          Failed to send message. Please try again.
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="name">Name *</label>
+        <input
+          id="name"
+          {...register('name')}
+          className={errors.name ? 'border-red-500' : ''}
+        />
+        {errors.name && (
+          <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="email">Email *</label>
+        <input
+          id="email"
+          type="email"
+          {...register('email')}
+          className={errors.email ? 'border-red-500' : ''}
+        />
+        {errors.email && (
+          <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="phone">Phone *</label>
+        <input
+          id="phone"
+          {...register('phone')}
+          placeholder="98XXXXXXXX"
+          className={errors.phone ? 'border-red-500' : ''}
+        />
+        {errors.phone && (
+          <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="message">Message *</label>
+        <textarea
+          id="message"
+          rows={4}
+          {...register('message')}
+          className={errors.message ? 'border-red-500' : ''}
+        />
+        {errors.message && (
+          <p className="text-red-500 text-sm mt-1">{errors.message.message}</p>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
+      >
+        {isSubmitting ? 'Sending...' : 'Send Message'}
+      </button>
+    </form>
+  )
+}
+```
+
+**Much better!** Now we have:
+- ✅ Proper validation
+- ✅ Loading state
+- ✅ Success/error messages
+- ✅ TypeScript types from schema
+- ✅ Better UX
+
+## API Route
+
+```tsx
+// app/api/contact/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const schema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().regex(/^[0-9]{10}$/),
+  message: z.string().min(10),
+})
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+
+    // Validate
+    const validatedData = schema.parse(body)
+
+    // Here you would:
+    // - Save to database
+    // - Send email notification
+    // - Send SMS confirmation
+    // etc.
+
+    console.log('Contact form submission:', validatedData)
+
+    // For now, just return success
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid data', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Advanced: Multi-Step Form
+
+For longer forms, break them into steps:
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+
+const step1Schema = z.object({
+  fullName: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().regex(/^[0-9]{10}$/),
+})
+
+const step2Schema = z.object({
+  businessName: z.string().min(2),
+  businessType: z.enum(['salon', 'spa', 'clinic', 'other']),
+  address: z.string().min(5),
+})
+
+const step3Schema = z.object({
+  services: z.array(z.string()).min(1, 'Select at least one service'),
+  averagePrice: z.string(),
+})
+
+type Step1Data = z.infer<typeof step1Schema>
+type Step2Data = z.infer<typeof step2Schema>
+type Step3Data = z.infer<typeof step3Schema>
+
+export default function OnboardingForm() {
+  const [step, setStep] = useState(1)
+  const [formData, setFormData] = useState<Partial<Step1Data & Step2Data & Step3Data>>({})
+
+  const step1Form = useForm<Step1Data>({
+    resolver: zodResolver(step1Schema),
+    defaultValues: formData,
+  })
+
+  const step2Form = useForm<Step2Data>({
+    resolver: zodResolver(step2Schema),
+    defaultValues: formData,
+  })
+
+  const step3Form = useForm<Step3Data>({
+    resolver: zodResolver(step3Schema),
+    defaultValues: formData,
+  })
+
+  const onStep1Submit = (data: Step1Data) => {
+    setFormData(prev => ({ ...prev, ...data }))
+    setStep(2)
+  }
+
+  const onStep2Submit = (data: Step2Data) => {
+    setFormData(prev => ({ ...prev, ...data }))
+    setStep(3)
+  }
+
+  const onStep3Submit = async (data: Step3Data) => {
+    const finalData = { ...formData, ...data }
+
+    // Submit to API
+    const response = await fetch('/api/onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(finalData),
+    })
+
+    if (response.ok) {
+      alert('Onboarding complete!')
+    }
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      {/* Progress indicator */}
+      <div className="flex justify-between mb-8">
+        <div className={`w-1/3 h-2 ${step >= 1 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+        <div className={`w-1/3 h-2 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+        <div className={`w-1/3 h-2 ${step >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+      </div>
+
+      {step === 1 && (
+        <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-4">
+          <h2>Personal Information</h2>
+
+          <div>
+            <label>Full Name</label>
+            <input {...step1Form.register('fullName')} />
+            {step1Form.formState.errors.fullName && (
+              <p className="text-red-500">{step1Form.formState.errors.fullName.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label>Email</label>
+            <input type="email" {...step1Form.register('email')} />
+            {step1Form.formState.errors.email && (
+              <p className="text-red-500">{step1Form.formState.errors.email.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label>Phone</label>
+            <input {...step1Form.register('phone')} placeholder="98XXXXXXXX" />
+            {step1Form.formState.errors.phone && (
+              <p className="text-red-500">{step1Form.formState.errors.phone.message}</p>
+            )}
+          </div>
+
+          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded">
+            Next
+          </button>
+        </form>
+      )}
+
+      {step === 2 && (
+        <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-4">
+          <h2>Business Information</h2>
+
+          <div>
+            <label>Business Name</label>
+            <input {...step2Form.register('businessName')} />
+          </div>
+
+          <div>
+            <label>Business Type</label>
+            <select {...step2Form.register('businessType')}>
+              <option value="">Select type</option>
+              <option value="salon">Salon</option>
+              <option value="spa">Spa</option>
+              <option value="clinic">Clinic</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Address</label>
+            <input {...step2Form.register('address')} placeholder="Thamel, Kathmandu" />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="flex-1 bg-gray-200 py-2 rounded"
+            >
+              Back
+            </button>
+            <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded">
+              Next
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === 3 && (
+        <form onSubmit={step3Form.handleSubmit(onStep3Submit)} className="space-y-4">
+          <h2>Services</h2>
+
+          <div>
+            <label>What services do you offer?</label>
+            <div className="space-y-2">
+              {['Haircut', 'Hair Color', 'Facial', 'Massage'].map(service => (
+                <label key={service} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    value={service}
+                    {...step3Form.register('services')}
+                  />
+                  {service}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label>Average Service Price</label>
+            <select {...step3Form.register('averagePrice')}>
+              <option value="">Select range</option>
+              <option value="500-1000">रू 500 - रू 1,000</option>
+              <option value="1000-2000">रू 1,000 - रू 2,000</option>
+              <option value="2000+">रू 2,000+</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="flex-1 bg-gray-200 py-2 rounded"
+            >
+              Back
+            </button>
+            <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded">
+              Complete
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+```
+
+## Form Tips
+
+### 1. Always Validate on Both Sides
+
+```tsx
+// Client-side (UX)
+const schema = z.object({ email: z.string().email() })
+
+// Server-side (Security)
+export async function POST(req: NextRequest) {
+  const data = schema.parse(await req.json()) // Will throw if invalid
+  // ...
+}
+```
+
+### 2. Show Loading States
+
+```tsx
+<button disabled={isSubmitting}>
+  {isSubmitting ? 'Saving...' : 'Save'}
+</button>
+```
+
+### 3. Preserve Form Data
+
+If user navigates away accidentally:
+
+```tsx
+useEffect(() => {
+  const saved = localStorage.getItem('draft-form')
+  if (saved) {
+    const data = JSON.parse(saved)
+    reset(data)
+  }
+}, [])
+
+useEffect(() => {
+  const subscription = watch((data) => {
+    localStorage.setItem('draft-form', JSON.stringify(data))
+  })
+  return () => subscription.unsubscribe()
+}, [watch])
+```
+
+### 4. Accessible Forms
+
+```tsx
+<div>
+  <label htmlFor="email">Email</label>
+  <input
+    id="email"
+    type="email"
+    aria-describedby="email-error"
+    aria-invalid={!!errors.email}
+    {...register('email')}
+  />
+  {errors.email && (
+    <p id="email-error" role="alert">
+      {errors.email.message}
+    </p>
+  )}
+</div>
+```
+
+## Conclusion
+
+Good forms need:
+1. Proper validation (client + server)
+2. Clear error messages
+3. Loading states
+4. Success/error feedback
+5. Accessibility
+
+react-hook-form + Zod makes this easy in Next.js.
+
+Start simple, add features as needed.

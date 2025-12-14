@@ -1,0 +1,574 @@
+---
+title: "Building a Design System That Developers Actually Use"
+excerpt: "Lessons from building Appointree's design system with shadcn/ui, Tailwind CSS, and TypeScript. How to create reusable components that don't get in the way."
+date: "2024-07-10"
+author: "Nischal Timalsina"
+tags: ["design-systems", "ui-ux", "tailwind", "react", "typescript"]
+published: true
+---
+
+# Building a Design System That Developers Actually Use
+
+I've worked with plenty of design systems that promised consistency but delivered friction. Components so rigid they couldn't handle edge cases. Documentation so sparse you had to read source code. Abstractions so heavy they felt like fighting the framework.
+
+When building Appointree's design system, I had one goal: **make it easier to build UI with the system than without it.**
+
+## The Foundation: shadcn/ui + Tailwind
+
+I chose [shadcn/ui](https://ui.shadcn.com/) for a reason that might seem counter-intuitive: **it's not really a component library.**
+
+Instead of `npm install @shadcn/ui`, you copy components into your codebase. This means:
+- ✅ Full ownership of the code
+- ✅ Modify components without fighting abstractions
+- ✅ No version lock-in
+- ✅ Tree-shake naturally (only bundle what you use)
+
+Think of it less as a component library and more as **really good starter code.**
+
+## Core Principles
+
+### 1. Composition Over Configuration
+
+```tsx
+// ❌ Configuration hell
+<Button
+  variant="primary"
+  size="large"
+  icon="check"
+  iconPosition="left"
+  loading={isLoading}
+  disabled={isDisabled}
+  onClick={handleClick}
+/>
+
+// ✅ Composition
+<Button onClick={handleClick} disabled={isDisabled}>
+  {isLoading ? (
+    <Spinner className="mr-2" />
+  ) : (
+    <CheckIcon className="mr-2" />
+  )}
+  Save Changes
+</Button>
+```
+
+The second approach is more verbose but infinitely more flexible. Need an icon on the right? Move it. Need two icons? Add them. Need to animate the icon? You control the markup.
+
+### 2. Sensible Defaults, Easy Overrides
+
+```tsx
+// components/ui/button.tsx
+import { Slot } from '@radix-ui/react-slot'
+import { cva, type VariantProps } from 'class-variance-authority'
+
+const buttonVariants = cva(
+  // Base styles - always applied
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        outline: 'border border-input hover:bg-accent hover:text-accent-foreground',
+        ghost: 'hover:bg-accent hover:text-accent-foreground',
+      },
+      size: {
+        default: 'h-10 px-4 py-2',
+        sm: 'h-9 px-3',
+        lg: 'h-11 px-8',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+)
+
+interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
+
+export function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: ButtonProps) {
+  const Comp = asChild ? Slot : 'button'
+  return (
+    <Comp
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+```
+
+This pattern gives you:
+- **Variants** for common use cases
+- **className override** for one-offs
+- **asChild** for polymorphism
+- **Full HTML button props** exposed
+
+### 3. TypeScript-First
+
+Every component is fully typed:
+
+```tsx
+import { Button } from '@/components/ui/button'
+
+// ✅ TypeScript knows all variants
+<Button variant="destructive" size="sm">Delete</Button>
+
+// ❌ TypeScript error - invalid variant
+<Button variant="danger">Delete</Button>
+
+// ✅ Autocomplete for all button props
+<Button
+  onClick={(e) => {}} // ✅ e is typed as MouseEvent
+  disabled={true}     // ✅ boolean
+  aria-label="Delete" // ✅ string
+/>
+```
+
+## Component Architecture
+
+### File Structure
+
+```
+components/
+├── ui/              # Base components (from shadcn)
+│   ├── button.tsx
+│   ├── input.tsx
+│   ├── dialog.tsx
+│   └── ...
+├── forms/           # Form components
+│   ├── form.tsx
+│   ├── form-field.tsx
+│   └── form-message.tsx
+├── data/            # Data display
+│   ├── table.tsx
+│   ├── card.tsx
+│   └── stat-card.tsx
+└── features/        # Feature-specific
+    ├── appointment-card.tsx
+    ├── booking-form.tsx
+    └── calendar-view.tsx
+```
+
+### Layering
+
+```
+Layer 4: Feature Components (appointment-card)
+   ↓
+Layer 3: Composed Components (form-field)
+   ↓
+Layer 2: Base Components (input, button)
+   ↓
+Layer 1: Utilities (cn, cva)
+```
+
+Each layer only depends on layers below it.
+
+## Practical Patterns
+
+### 1. Compound Components
+
+For complex components, use compound pattern:
+
+```tsx
+// ✅ Self-documenting and flexible
+<Dialog>
+  <DialogTrigger asChild>
+    <Button>Open Dialog</Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Are you sure?</DialogTitle>
+      <DialogDescription>
+        This action cannot be undone.
+      </DialogDescription>
+    </DialogHeader>
+    <DialogFooter>
+      <Button variant="outline">Cancel</Button>
+      <Button variant="destructive">Delete</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
+vs.
+
+```tsx
+// ❌ Props API gets unwieldy
+<Dialog
+  trigger={<Button>Open</Button>}
+  title="Are you sure?"
+  description="This action cannot be undone."
+  actions={[
+    { label: 'Cancel', variant: 'outline' },
+    { label: 'Delete', variant: 'destructive', onClick: handleDelete },
+  ]}
+/>
+```
+
+### 2. Polymorphic Components
+
+Make components work with different underlying elements:
+
+```tsx
+<Button asChild>
+  <Link href="/dashboard">Dashboard</Link>
+</Button>
+
+// Renders: <a class="button-classes" href="/dashboard">Dashboard</a>
+```
+
+This is powered by Radix UI's `Slot` component:
+
+```tsx
+import { Slot } from '@radix-ui/react-slot'
+
+const Comp = asChild ? Slot : 'button'
+return <Comp {...props} />
+```
+
+### 3. Controlled vs Uncontrolled
+
+Support both patterns:
+
+```tsx
+// Uncontrolled (component manages state)
+<Dialog>
+  <DialogTrigger>Open</DialogTrigger>
+  <DialogContent>...</DialogContent>
+</Dialog>
+
+// Controlled (you manage state)
+const [open, setOpen] = useState(false)
+
+<Dialog open={open} onOpenChange={setOpen}>
+  <DialogContent>...</DialogContent>
+</Dialog>
+```
+
+### 4. Consistent Data Attributes
+
+Add data attributes for testing and styling:
+
+```tsx
+<Button
+  data-state={isActive ? 'active' : 'inactive'}
+  data-variant={variant}
+>
+  {children}
+</Button>
+
+// Easy to test
+await page.click('[data-state="active"]')
+
+// Easy to style
+[data-state="active"] {
+  background: blue;
+}
+```
+
+## Form Patterns
+
+Forms are the hardest part of any design system. Here's my approach:
+
+```tsx
+'use client'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+
+const schema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email'),
+  role: z.enum(['admin', 'staff', 'customer']),
+})
+
+type FormData = z.infer<typeof schema>
+
+export function UserForm() {
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+  })
+
+  async function onSubmit(data: FormData) {
+    // data is fully typed and validated!
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input type="email" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit">Submit</Button>
+      </form>
+    </Form>
+  )
+}
+```
+
+Why this pattern works:
+- ✅ Single source of truth (Zod schema)
+- ✅ TypeScript validation
+- ✅ Accessible by default
+- ✅ Consistent error handling
+- ✅ Easy to extend
+
+## Theme System
+
+Tailwind CSS + CSS variables for themability:
+
+```css
+/* app/globals.css */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    /* ... */
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    /* ... */
+  }
+}
+```
+
+Then in Tailwind:
+
+```js
+// tailwind.config.ts
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+      },
+    },
+  },
+}
+```
+
+Now you can use semantic color names:
+
+```tsx
+<div className="bg-background text-foreground">
+  <Button className="bg-primary text-primary-foreground">
+    Click me
+  </Button>
+</div>
+```
+
+Dark mode just works:
+
+```tsx
+<body className={theme === 'dark' ? 'dark' : ''}>
+  {children}
+</body>
+```
+
+## Documentation Strategy
+
+### 1. Storybook is Overkill
+
+For small teams, inline examples work better:
+
+```tsx
+// components/ui/button.tsx
+
+/**
+ * Button component
+ *
+ * @example
+ * // Default button
+ * <Button>Click me</Button>
+ *
+ * @example
+ * // Destructive button
+ * <Button variant="destructive">Delete</Button>
+ *
+ * @example
+ * // As link
+ * <Button asChild>
+ *   <Link href="/dashboard">Go to dashboard</Link>
+ * </Button>
+ */
+export function Button({ ... }) { ... }
+```
+
+### 2. Component Playground
+
+Build a simple playground page:
+
+```tsx
+// app/playground/page.tsx
+export default function PlaygroundPage() {
+  return (
+    <div className="space-y-8 p-8">
+      <section>
+        <h2>Buttons</h2>
+        <div className="flex gap-2">
+          <Button>Default</Button>
+          <Button variant="destructive">Destructive</Button>
+          <Button variant="outline">Outline</Button>
+          <Button variant="ghost">Ghost</Button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Forms</h2>
+        <div className="max-w-md">
+          <UserForm />
+        </div>
+      </section>
+    </div>
+  )
+}
+```
+
+This is faster than Storybook and lives in your app.
+
+## Performance Considerations
+
+### 1. Bundle Size
+
+shadcn/ui components are tiny because they're just React + Tailwind:
+
+```
+Button:     ~500 bytes
+Input:      ~300 bytes
+Dialog:     ~2KB (includes Radix UI primitives)
+```
+
+Compare to Material-UI:
+```
+Button:     ~15KB
+TextField:  ~25KB
+Dialog:     ~30KB
+```
+
+### 2. CSS Optimization
+
+Tailwind purges unused CSS automatically:
+
+```js
+// tailwind.config.ts
+module.exports = {
+  content: [
+    './app/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+  ],
+}
+```
+
+Production CSS bundle: **~15KB** (gzipped)
+
+### 3. Code Splitting
+
+Components code-split naturally with Next.js:
+
+```tsx
+// Only loads Dialog code when rendered
+import { Dialog } from '@/components/ui/dialog'
+
+function Settings() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Settings</Button>
+      {open && <Dialog>...</Dialog>}
+    </>
+  )
+}
+```
+
+## Common Mistakes
+
+
+**1. Over-abstracting too early**
+
+Don't create a component until you've used the pattern 3+ times.
+
+
+
+**2. Fighting the library**
+
+If you find yourself adding lots of escape hatches, the abstraction might be wrong.
+
+
+
+**3. Ignoring accessibility**
+
+Use Radix UI primitives – they handle ARIA attributes, keyboard nav, and focus management.
+
+
+## The Result
+
+Appointree's design system has:
+- **47 base components** (from shadcn/ui)
+- **~30 custom components** (feature-specific)
+- **100% TypeScript coverage**
+- **15KB CSS bundle** (after gzip)
+- **Zero accessibility violations** (tested with axe)
+
+And most importantly: **developers actually enjoy using it.**
+
+## Conclusion
+
+A good design system should:
+
+1. **Make common things easy** – sensible defaults
+2. **Make complex things possible** – escape hatches
+3. **Be easy to modify** – own the code
+4. **Stay out of the way** – composition over configuration
+5. **Fail at compile time** – TypeScript everywhere
+
+
+> Start with shadcn/ui, modify as needed, and build your feature components on top. You'll have a design system that scales with your product, not against it.

@@ -1,0 +1,535 @@
+---
+title: "React Query in Production: Patterns That Actually Work"
+excerpt: "After using React Query (TanStack Query) in a production SaaS application, here are the patterns, anti-patterns, and gotchas I've discovered for managing server state effectively."
+date: "2025-02-20"
+author: "Nischal Timalsina"
+tags: ["react", "react-query", "state-management", "typescript"]
+published: true
+---
+
+# React Query in Production: Patterns That Actually Work
+
+React Query (now TanStack Query) has fundamentally changed how I think about state management in React applications. After using it extensively in Appointree, I've learned what works, what doesn't, and where the dragons hide.
+
+## Why React Query?
+
+Before React Query, managing server state meant:
+- Writing Redux actions, reducers, and selectors
+- Manually handling loading states
+- Implementing caching logic
+- Building retry mechanisms
+- Syncing data across components
+
+React Query handles all of this with a fraction of the code.
+
+```typescript
+// Before: ~50 lines of Redux boilerplate
+// After:
+const { data, isLoading, error } = useQuery({
+  queryKey: ['appointments'],
+  queryFn: fetchAppointments,
+})
+```
+
+## Core Patterns
+
+### 1. Query Key Structure
+
+Query keys are crucial – they're how React Query knows when to refetch, invalidate, or serve cached data.
+
+```typescript
+// ❌ Brittle - easy to make mistakes
+useQuery({ queryKey: ['appointments'], ... })
+useQuery({ queryKey: ['appointments', date], ... })
+
+// ✅ Structured - consistent and type-safe
+const appointmentKeys = {
+  all: ['appointments'] as const,
+  lists: () => [...appointmentKeys.all, 'list'] as const,
+  list: (filters: AppointmentFilters) =>
+    [...appointmentKeys.lists(), filters] as const,
+  details: () => [...appointmentKeys.all, 'detail'] as const,
+  detail: (id: string) => [...appointmentKeys.details(), id] as const,
+}
+
+// Usage
+useQuery({
+  queryKey: appointmentKeys.list({ date, providerId }),
+  queryFn: () => fetchAppointments({ date, providerId }),
+})
+```
+
+> This pattern comes from the official TanStack Query docs and is a game-changer for maintaining cache consistency.
+
+### 2. Custom Hooks for Business Logic
+
+Don't put business logic in components. Wrap React Query in custom hooks:
+
+```typescript
+// hooks/use-appointments.ts
+export function useAppointments(filters: AppointmentFilters) {
+  return useQuery({
+    queryKey: appointmentKeys.list(filters),
+    queryFn: () => appointmentsApi.list(filters),
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+  })
+}
+
+export function useAppointment(id: string) {
+  return useQuery({
+    queryKey: appointmentKeys.detail(id),
+    queryFn: () => appointmentsApi.get(id),
+    enabled: !!id, // Don't run if no id
+  })
+}
+
+export function useCreateAppointment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: appointmentsApi.create,
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({
+        queryKey: appointmentKeys.lists()
+      })
+    },
+  })
+}
+```
+
+### 3. Optimistic Updates
+
+For better UX, update the UI immediately and rollback on error:
+
+```typescript
+export function useUpdateAppointmentStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, status }: UpdateStatusInput) =>
+      appointmentsApi.updateStatus(id, status),
+
+    onMutate: async ({ id, status }) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({
+        queryKey: appointmentKeys.detail(id)
+      })
+
+      // Snapshot previous value
+      const previous = queryClient.getQueryData(
+        appointmentKeys.detail(id)
+      )
+
+      // Optimistically update
+      queryClient.setQueryData(
+        appointmentKeys.detail(id),
+        (old: Appointment) => ({ ...old, status })
+      )
+
+      return { previous }
+    },
+
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previous) {
+        queryClient.setQueryData(
+          appointmentKeys.detail(variables.id),
+          context.previous
+        )
+      }
+    },
+
+    onSettled: (data, error, variables) => {
+      // Refetch to sync with server
+      queryClient.invalidateQueries({
+        queryKey: appointmentKeys.detail(variables.id)
+      })
+    },
+  })
+}
+```
+
+### 4. Paginated Queries
+
+Handle pagination elegantly:
+
+```typescript
+export function useAppointmentsPaginated(
+  filters: AppointmentFilters,
+  page: number = 1
+) {
+  return useQuery({
+    queryKey: [...appointmentKeys.list(filters), page],
+    queryFn: () => appointmentsApi.list({ ...filters, page }),
+    keepPreviousData: true, // Keep old data while fetching new
+    staleTime: 1000 * 60, // Consider fresh for 1 minute
+  })
+}
+
+// In component
+function AppointmentList() {
+  const [page, setPage] = useState(1)
+  const { data, isLoading, isFetching } = useAppointmentsPaginated({}, page)
+
+  return (
+    <div>
+      {isLoading ? (
+        <Spinner />
+      ) : (
+        <div className={isFetching ? 'opacity-50' : ''}>
+          {data.appointments.map(apt => (
+            <AppointmentCard key={apt.id} appointment={apt} />
+          ))}
+        </div>
+      )}
+
+      <Pagination
+        page={page}
+        totalPages={data.totalPages}
+        onPageChange={setPage}
+      />
+    </div>
+  )
+}
+```
+
+### 5. Infinite Queries
+
+For infinite scroll:
+
+```typescript
+export function useInfiniteAppointments(filters: AppointmentFilters) {
+  return useInfiniteQuery({
+    queryKey: [...appointmentKeys.lists(), 'infinite', filters],
+    queryFn: ({ pageParam = 1 }) =>
+      appointmentsApi.list({ ...filters, page: pageParam }),
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.hasMore ? allPages.length + 1 : undefined
+    },
+    initialPageParam: 1,
+  })
+}
+
+// In component
+function InfiniteAppointmentList() {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteAppointments({})
+
+  return (
+    <div>
+      {data?.pages.map((page, i) => (
+        <Fragment key={i}>
+          {page.appointments.map(apt => (
+            <AppointmentCard key={apt.id} appointment={apt} />
+          ))}
+        </Fragment>
+      ))}
+
+      {hasNextPage && (
+        <button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+          {isFetchingNextPage ? 'Loading...' : 'Load More'}
+        </button>
+      )}
+    </div>
+  )
+}
+```
+
+## Advanced Patterns
+
+### 1. Dependent Queries
+
+Wait for one query before running another:
+
+```typescript
+function AppointmentDetails({ id }: { id: string }) {
+  // First, get the appointment
+  const { data: appointment } = useAppointment(id)
+
+  // Then, get the customer details (only if we have customerId)
+  const { data: customer } = useQuery({
+    queryKey: ['customers', appointment?.customerId],
+    queryFn: () => customersApi.get(appointment!.customerId),
+    enabled: !!appointment?.customerId, // Only run if customerId exists
+  })
+
+  return (
+    <div>
+      <h1>{appointment?.service}</h1>
+      <p>Customer: {customer?.name}</p>
+    </div>
+  )
+}
+```
+
+### 2. Parallel Queries
+
+Fetch multiple resources simultaneously:
+
+```typescript
+function Dashboard() {
+  const appointments = useQuery({
+    queryKey: appointmentKeys.lists(),
+    queryFn: appointmentsApi.list,
+  })
+
+  const customers = useQuery({
+    queryKey: customerKeys.lists(),
+    queryFn: customersApi.list,
+  })
+
+  const analytics = useQuery({
+    queryKey: ['analytics'],
+    queryFn: analyticsApi.getSummary,
+  })
+
+  // All three queries run in parallel
+  if (appointments.isLoading || customers.isLoading || analytics.isLoading) {
+    return <Spinner />
+  }
+
+  return (
+    <div>
+      <Stats data={analytics.data} />
+      <RecentAppointments appointments={appointments.data} />
+      <TopCustomers customers={customers.data} />
+    </div>
+  )
+}
+```
+
+Or use `useQueries` for dynamic parallel queries:
+
+```typescript
+function MultiProviderDashboard({ providerIds }: { providerIds: string[] }) {
+  const queries = useQueries({
+    queries: providerIds.map(id => ({
+      queryKey: appointmentKeys.list({ providerId: id }),
+      queryFn: () => appointmentsApi.list({ providerId: id }),
+    })),
+  })
+
+  const isLoading = queries.some(q => q.isLoading)
+  const allData = queries.map(q => q.data).filter(Boolean)
+
+  return <ProviderComparison data={allData} />
+}
+```
+
+### 3. Prefetching
+
+Prefetch data for better UX:
+
+```typescript
+function AppointmentCard({ appointment }: { appointment: Appointment }) {
+  const queryClient = useQueryClient()
+
+  // Prefetch on hover
+  const handleMouseEnter = () => {
+    queryClient.prefetchQuery({
+      queryKey: appointmentKeys.detail(appointment.id),
+      queryFn: () => appointmentsApi.get(appointment.id),
+    })
+  }
+
+  return (
+    <Link
+      href={`/appointments/${appointment.id}`}
+      onMouseEnter={handleMouseEnter}
+    >
+      {appointment.service} - {appointment.time}
+    </Link>
+  )
+}
+```
+
+### 4. Background Refetching
+
+Keep data fresh in the background:
+
+```typescript
+// Global config in _app.tsx or layout.tsx
+<QueryClientProvider client={queryClient}>
+  <App />
+</QueryClientProvider>
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60, // 1 minute
+      gcTime: 1000 * 60 * 10, // 10 minutes
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      retry: 1,
+    },
+  },
+})
+```
+
+## Anti-Patterns to Avoid
+
+### ❌ 1. Not Using Structured Query Keys
+
+```typescript
+// Bad - hard to maintain and invalidate
+useQuery({ queryKey: ['data'], ... })
+useQuery({ queryKey: ['data-2'], ... })
+
+// Good
+const keys = {
+  appointments: ['appointments'] as const,
+  appointment: (id: string) => ['appointments', id] as const,
+}
+```
+
+### ❌ 2. Over-Invalidating
+
+```typescript
+// Bad - invalidates ALL queries
+queryClient.invalidateQueries()
+
+// Good - surgical invalidation
+queryClient.invalidateQueries({
+  queryKey: appointmentKeys.lists()
+})
+```
+
+### ❌ 3. Not Handling Loading States
+
+```typescript
+// Bad
+const { data } = useQuery({ ... })
+return <div>{data.map(...)}</div> // Error if data is undefined!
+
+// Good
+const { data, isLoading, error } = useQuery({ ... })
+
+if (isLoading) return <Spinner />
+if (error) return <ErrorMessage error={error} />
+if (!data) return null
+
+return <div>{data.map(...)}</div>
+```
+
+### ❌ 4. Putting Side Effects in queryFn
+
+```typescript
+// Bad
+const { data } = useQuery({
+  queryKey: ['appointments'],
+  queryFn: async () => {
+    const data = await api.get('/appointments')
+    toast.success('Loaded!') // Don't do this!
+    return data
+  },
+})
+
+// Good - use onSuccess
+const { data } = useQuery({
+  queryKey: ['appointments'],
+  queryFn: () => api.get('/appointments'),
+})
+
+// Or handle in mutation
+const mutation = useMutation({
+  mutationFn: api.create,
+  onSuccess: () => toast.success('Created!'),
+})
+```
+
+## Performance Tips
+
+### 1. Select Only What You Need
+
+```typescript
+// Returns entire appointment object
+const { data } = useAppointment(id)
+
+// Better - select only what you need
+const customerName = useQuery({
+  queryKey: appointmentKeys.detail(id),
+  queryFn: () => appointmentsApi.get(id),
+  select: (data) => data.customer.name,
+})
+```
+
+### 2. Disable Refetching When Appropriate
+
+```typescript
+// Static data that never changes
+const { data } = useQuery({
+  queryKey: ['timezones'],
+  queryFn: fetchTimezones,
+  staleTime: Infinity, // Never consider stale
+  gcTime: Infinity, // Never garbage collect
+})
+```
+
+### 3. Use Suspense (Experimental)
+
+```typescript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      suspense: true,
+    },
+  },
+})
+
+function Appointments() {
+  const { data } = useAppointments() // No loading state!
+  return <div>{data.map(...)}</div>
+}
+
+// Wrap in Suspense boundary
+<Suspense fallback={<Spinner />}>
+  <Appointments />
+</Suspense>
+```
+
+## Debugging Tips
+
+### 1. React Query DevTools
+
+```typescript
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+
+<QueryClientProvider client={queryClient}>
+  <App />
+  <ReactQueryDevtools initialIsOpen={false} />
+</QueryClientProvider>
+```
+
+### 2. Logging Query State
+
+```typescript
+const query = useAppointments()
+
+useEffect(() => {
+  console.log('Query state:', {
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    error: query.error,
+  })
+}, [query.status, query.fetchStatus, query.error])
+```
+
+## Conclusion
+
+React Query is phenomenal for managing server state, but it requires understanding its mental model:
+
+1. **Query keys are your cache identity** – structure them well
+2. **Mutations trigger invalidations** – think about what needs to update
+3. **Stale vs Fresh** – configure appropriately for your use case
+4. **Background refetching is your friend** – embrace it
+5. **Custom hooks are essential** – don't repeat yourself
+
+
+> These patterns have saved me thousands of lines of code and countless bugs in Appointree. React Query isn't just a library—it's a different way of thinking about data.
+

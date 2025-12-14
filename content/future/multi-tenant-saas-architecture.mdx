@@ -1,0 +1,383 @@
+---
+title: "Building a Multi-Tenant SaaS Architecture: Lessons from the Trenches"
+excerpt: "Deep dive into designing and implementing a scalable multi-tenant SaaS platform with Next.js, MongoDB, and TypeScript. Learn about data isolation, tenant routing, and performance optimization."
+date: "2025-01-15"
+author: "Nischal Timalsina"
+tags: ["saas", "architecture", "nextjs", "mongodb", "typescript"]
+published: true
+---
+
+# Building a Multi-Tenant SaaS Architecture: Lessons from the Trenches
+
+When I started building Appointree, a multi-tenant appointment booking platform, I quickly realized that multi-tenancy isn't just about adding a `tenantId` field to your database schema. It's a fundamental architectural decision that affects every layer of your application.
+
+## What is Multi-Tenancy?
+
+Multi-tenancy is an architecture where a single instance of software serves multiple customers (tenants). Think Shopify, Slack, or Salesforce – thousands of businesses using the same platform, each with completely isolated data and configurations.
+
+The key challenge? **Every tenant should feel like they have their own private system.**
+
+## Three Approaches to Multi-Tenancy
+
+### 1. Separate Databases per Tenant
+
+**Pros:**
+- Complete data isolation
+- Easy to backup/restore individual tenants
+- Can scale different tenants independently
+
+**Cons:**
+- Higher infrastructure costs
+- Complex connection pooling
+- Difficult to implement cross-tenant analytics
+
+### 2. Separate Schemas per Tenant
+
+**Pros:**
+- Good data isolation
+- Reasonable cost efficiency
+- Easier than separate databases
+
+**Cons:**
+- Still requires connection management
+- Schema migrations across hundreds of schemas can be slow
+
+### 3. Shared Schema with Tenant Discriminator
+
+**Pros:**
+- Most cost-effective
+- Simple connection management
+- Easy to implement
+
+**Cons:**
+- Requires careful query filtering
+- Higher risk of data leakage
+- More complex row-level security
+
+
+> For Appointree, I chose approach #3 (shared schema) because it offers the best balance of cost-efficiency and simplicity for an early-stage SaaS product.
+
+## Implementation Strategy
+
+Here's how I implemented multi-tenancy in Appointree:
+
+### 1. MongoDB Schema Design
+
+```typescript
+// Base tenant-aware schema
+interface TenantAware {
+  tenantId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Example: Appointment model
+interface Appointment extends TenantAware {
+  _id: string
+  customerId: string
+  providerId: string
+  serviceId: string
+  startTime: Date
+  endTime: Date
+  status: 'pending' | 'confirmed' | 'cancelled'
+}
+```
+
+Every collection has a compound index on `tenantId` and the primary query field:
+
+```typescript
+// MongoDB index for fast tenant-scoped queries
+db.appointments.createIndex({ tenantId: 1, startTime: 1 })
+db.appointments.createIndex({ tenantId: 1, providerId: 1 })
+db.appointments.createIndex({ tenantId: 1, customerId: 1 })
+```
+
+### 2. Automatic Tenant Context Injection
+
+Never rely on developers remembering to add `tenantId` to queries. Build it into your data access layer:
+
+```typescript
+// lib/db/tenant-context.ts
+import { getServerSession } from 'next-auth'
+
+export async function getTenantContext() {
+  const session = await getServerSession()
+
+  if (!session?.user?.tenantId) {
+    throw new Error('No tenant context available')
+  }
+
+  return {
+    tenantId: session.user.tenantId,
+    userId: session.user.id,
+    role: session.user.role,
+  }
+}
+
+// Usage in API routes
+export async function GET() {
+  const { tenantId } = await getTenantContext()
+
+  // Automatically scoped to tenant
+  const appointments = await db.appointments.find({
+    tenantId,
+    startTime: { $gte: new Date() }
+  })
+
+  return Response.json(appointments)
+}
+```
+
+### 3. Custom React Query Hooks
+
+Create tenant-aware hooks that handle data fetching:
+
+```typescript
+// hooks/use-appointments.ts
+export function useAppointments(filters?: AppointmentFilters) {
+  return useQuery({
+    queryKey: ['appointments', filters],
+    queryFn: async () => {
+      const response = await fetch('/api/appointments?' + new URLSearchParams(filters))
+      if (!response.ok) throw new Error('Failed to fetch')
+      return response.json()
+    },
+  })
+}
+```
+
+The API automatically scopes to the current tenant through the session.
+
+## Security Considerations
+
+> Multi-tenancy introduces unique security challenges. A single bug could expose one tenant's data to another.
+
+### 1. Defense in Depth
+
+Implement multiple layers of tenant validation:
+
+```typescript
+// Validate at the API layer
+const { tenantId } = await getTenantContext()
+
+// Validate ownership before operations
+const appointment = await db.appointments.findOne({ _id: appointmentId })
+
+if (appointment.tenantId !== tenantId) {
+  throw new Error('Unauthorized access')
+}
+```
+
+### 2. Automated Testing
+
+Write tests that verify tenant isolation:
+
+```typescript
+describe('Tenant Isolation', () => {
+  it('should not allow cross-tenant data access', async () => {
+    // Create appointment for tenant A
+    const tenantA = await createTestTenant()
+    const appointmentA = await createAppointment(tenantA.id)
+
+    // Try to access from tenant B
+    const tenantB = await createTestTenant()
+    const response = await fetch(`/api/appointments/${appointmentA.id}`, {
+      headers: { 'X-Tenant-ID': tenantB.id }
+    })
+
+    expect(response.status).toBe(404)
+  })
+})
+```
+
+### 3. Database-Level Row Security
+
+For PostgreSQL users, implement Row-Level Security (RLS). While MongoDB doesn't have RLS, you can implement similar patterns:
+
+```typescript
+// Custom MongoDB middleware
+schema.pre(/^find/, function() {
+  const tenantId = getCurrentTenantId()
+  if (tenantId) {
+    this.where({ tenantId })
+  }
+})
+```
+
+## Performance Optimization
+
+### 1. Tenant-Specific Caching
+
+Cache data per tenant to avoid cache poisoning:
+
+```typescript
+const cacheKey = `tenant:${tenantId}:appointments:${date}`
+const cached = await redis.get(cacheKey)
+
+if (cached) return JSON.parse(cached)
+
+const appointments = await db.appointments.find({ tenantId, date })
+await redis.setex(cacheKey, 300, JSON.stringify(appointments))
+```
+
+### 2. Query Optimization
+
+Always include `tenantId` in your queries and indexes:
+
+```typescript
+// ❌ Slow - table scan
+db.appointments.find({ customerId: '123' })
+
+// ✅ Fast - uses compound index
+db.appointments.find({
+  tenantId: 'tenant-123',
+  customerId: '123'
+})
+```
+
+### 3. Connection Pooling
+
+Use connection pooling wisely:
+
+```typescript
+// lib/db/mongodb.ts
+import { MongoClient } from 'mongodb'
+
+const client = new MongoClient(process.env.MONGODB_URI!, {
+  maxPoolSize: 50, // Adjust based on tenant count
+  minPoolSize: 10,
+})
+
+export async function getDb() {
+  if (!client.topology?.isConnected()) {
+    await client.connect()
+  }
+  return client.db()
+}
+```
+
+## Tenant Onboarding Flow
+
+Make tenant creation seamless:
+
+```typescript
+export async function createTenant(data: CreateTenantInput) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    // 1. Create tenant record
+    const tenant = await Tenant.create([{
+      name: data.businessName,
+      slug: data.slug,
+      settings: defaultTenantSettings,
+    }], { session })
+
+    // 2. Create owner user
+    const owner = await User.create([{
+      tenantId: tenant[0]._id,
+      email: data.email,
+      role: 'owner',
+      name: data.name,
+    }], { session })
+
+    // 3. Initialize default data (services, business hours, etc.)
+    await initializeTenantDefaults(tenant[0]._id, session)
+
+    await session.commitTransaction()
+    return tenant[0]
+  } catch (error) {
+    await session.abortTransaction()
+    throw error
+  } finally {
+    session.endSession()
+  }
+}
+```
+
+## Monitoring and Observability
+
+Track tenant-specific metrics:
+
+```typescript
+// Track per-tenant API usage
+await metrics.increment('api.requests', {
+  tenantId,
+  endpoint: req.url,
+  status: res.status,
+})
+
+// Alert on anomalies
+if (requestCount > tenantLimits.maxRequestsPerMinute) {
+  await sendAlert({
+    type: 'rate_limit_exceeded',
+    tenantId,
+    requestCount,
+  })
+}
+```
+
+## Common Pitfalls
+
+### 1. Forgetting Tenant Context
+
+Always validate tenant context exists:
+
+```typescript
+const { tenantId } = await getTenantContext()
+if (!tenantId) {
+  return Response.json({ error: 'Tenant context required' }, { status: 401 })
+}
+```
+
+### 2. Leaking Data in Error Messages
+
+Never expose tenant IDs or sensitive data in errors:
+
+```typescript
+// ❌ Bad
+throw new Error(`Appointment ${id} not found for tenant ${tenantId}`)
+
+// ✅ Good
+throw new Error('Appointment not found')
+```
+
+### 3. Not Planning for Tenant Deletion
+
+Implement soft deletes and data retention policies:
+
+```typescript
+interface Tenant {
+  _id: string
+  deletedAt?: Date
+  dataRetentionDays: number
+}
+
+// Cron job to purge old tenant data
+async function purgeDeletedTenants() {
+  const threshold = new Date()
+  threshold.setDate(threshold.getDate() - 90)
+
+  const tenantsToDelete = await Tenant.find({
+    deletedAt: { $lte: threshold }
+  })
+
+  for (const tenant of tenantsToDelete) {
+    await deleteTenantData(tenant._id)
+  }
+}
+```
+
+## Conclusion
+
+Building a multi-tenant SaaS is challenging but rewarding. The key lessons:
+
+1. **Choose the right multi-tenancy model** for your scale and budget
+2. **Build tenant isolation into your data layer**, not your application logic
+3. **Security is paramount** – test tenant isolation exhaustively
+4. **Monitor per-tenant metrics** to catch issues early
+5. **Plan for growth** – both in tenant count and tenant size
+
+Multi-tenancy done right gives you incredible efficiency. Done wrong, it's a security nightmare. Start simple, test thoroughly, and iterate based on real-world usage.
+
+> Want to see this in action? Check out the [Appointree repository](https://github.com/nischaltimalsina/appointree) for a real-world implementation of these patterns.

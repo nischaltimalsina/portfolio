@@ -1,0 +1,543 @@
+---
+title: "Next.js API Routes: From Zero to Production"
+excerpt: "Learn how to build API routes in Next.js with proper error handling, validation, and authentication. No backend framework needed."
+date: "2025-07-25"
+author: "Nischal Timalsina"
+tags: ["nextjs", "api", "backend", "tutorial"]
+published: true
+---
+
+# Next.js API Routes: From Zero to Production
+
+Next.js lets you build your entire backend without Express, Fastify, or any framework. Just create files in `app/api/`.
+
+## Basic API Route
+
+```tsx
+// app/api/hello/route.ts
+export async function GET() {
+  return Response.json({ message: 'Hello from API!' })
+}
+```
+
+That's it. Visit `/api/hello` and you get JSON.
+
+## Different HTTP Methods
+
+```tsx
+// app/api/appointments/route.ts
+
+// GET /api/appointments
+export async function GET(request: Request) {
+  const appointments = [
+    { id: 1, customer: 'Ram Sharma', date: '2025-07-26' },
+    { id: 2, customer: 'Sita Devi', date: '2025-07-27' },
+  ]
+
+  return Response.json(appointments)
+}
+
+// POST /api/appointments
+export async function POST(request: Request) {
+  const body = await request.json()
+
+  // Create appointment in database
+  const newAppointment = {
+    id: 3,
+    ...body,
+  }
+
+  return Response.json(newAppointment, { status: 201 })
+}
+
+// PATCH /api/appointments
+export async function PATCH(request: Request) {
+  const body = await request.json()
+
+  // Update appointment
+  return Response.json({ message: 'Updated' })
+}
+
+// DELETE /api/appointments
+export async function DELETE(request: Request) {
+  // Delete appointment
+  return Response.json({ message: 'Deleted' })
+}
+```
+
+## Dynamic Routes
+
+```tsx
+// app/api/appointments/[id]/route.ts
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+
+  // Fetch from database
+  const appointment = {
+    id,
+    customer: 'Ram Sharma',
+    date: '2025-07-26',
+    time: '10:00 AM',
+  }
+
+  return Response.json(appointment)
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+
+  // Delete from database
+  return Response.json({ message: `Appointment ${id} deleted` })
+}
+```
+
+## Query Parameters
+
+```tsx
+// app/api/appointments/route.ts
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const date = searchParams.get('date')
+  const status = searchParams.get('status')
+
+  // GET /api/appointments?date=2025-07-26&status=confirmed
+
+  let appointments = getAllAppointments()
+
+  if (date) {
+    appointments = appointments.filter(a => a.date === date)
+  }
+
+  if (status) {
+    appointments = appointments.filter(a => a.status === status)
+  }
+
+  return Response.json(appointments)
+}
+```
+
+## Request Headers
+
+```tsx
+export async function POST(request: Request) {
+  const apiKey = request.headers.get('X-API-Key')
+
+  if (apiKey !== process.env.API_KEY) {
+    return Response.json(
+      { error: 'Invalid API key' },
+      { status: 401 }
+    )
+  }
+
+  // Continue...
+}
+```
+
+## Validation with Zod
+
+```tsx
+// app/api/appointments/route.ts
+import { z } from 'zod'
+
+const appointmentSchema = z.object({
+  customerName: z.string().min(2),
+  phone: z.string().regex(/^[0-9]{10}$/),
+  date: z.string(),
+  time: z.string(),
+})
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+
+    // Validate
+    const validated = appointmentSchema.parse(body)
+
+    // Create appointment
+    const appointment = {
+      id: Date.now(),
+      ...validated,
+      status: 'pending',
+    }
+
+    return Response.json(appointment, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return Response.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    return Response.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Error Handling
+
+```tsx
+// lib/api-error.ts
+export class APIError extends Error {
+  constructor(
+    public statusCode: number,
+    message: string
+  ) {
+    super(message)
+  }
+}
+
+// app/api/appointments/[id]/route.ts
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const appointment = await getAppointmentById(params.id)
+
+    if (!appointment) {
+      throw new APIError(404, 'Appointment not found')
+    }
+
+    return Response.json(appointment)
+  } catch (error) {
+    if (error instanceof APIError) {
+      return Response.json(
+        { error: error.message },
+        { status: error.statusCode }
+      )
+    }
+
+    console.error(error)
+    return Response.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Authentication
+
+```tsx
+// app/api/appointments/route.ts
+import { auth } from '@/lib/auth'
+
+export async function GET(request: Request) {
+  const session = await auth()
+
+  if (!session) {
+    return Response.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  // Get appointments for this user
+  const appointments = await getAppointments(session.user.id)
+
+  return Response.json(appointments)
+}
+
+export async function POST(request: Request) {
+  const session = await auth()
+
+  if (!session) {
+    return Response.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  const body = await request.json()
+
+  // Create appointment
+  const appointment = await createAppointment({
+    ...body,
+    userId: session.user.id,
+  })
+
+  return Response.json(appointment, { status: 201 })
+}
+```
+
+## Database Example (MongoDB)
+
+```tsx
+// app/api/appointments/route.ts
+import { connectToDatabase } from '@/lib/mongodb'
+import { appointmentSchema } from '@/lib/validations'
+
+export async function GET() {
+  const db = await connectToDatabase()
+  const appointments = await db
+    .collection('appointments')
+    .find({})
+    .toArray()
+
+  return Response.json(appointments)
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const validated = appointmentSchema.parse(body)
+
+    const db = await connectToDatabase()
+    const result = await db
+      .collection('appointments')
+      .insertOne({
+        ...validated,
+        createdAt: new Date(),
+      })
+
+    return Response.json(
+      { id: result.insertedId, ...validated },
+      { status: 201 }
+    )
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return Response.json(
+        { error: error.errors },
+        { status: 400 }
+      )
+    }
+
+    return Response.json(
+      { error: 'Failed to create appointment' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Rate Limiting
+
+```tsx
+// lib/rate-limit.ts
+const rateLimit = new Map()
+
+export function checkRateLimit(ip: string, limit = 10) {
+  const now = Date.now()
+  const windowMs = 60 * 1000 // 1 minute
+
+  if (!rateLimit.has(ip)) {
+    rateLimit.set(ip, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+
+  const data = rateLimit.get(ip)
+
+  if (now > data.resetTime) {
+    rateLimit.set(ip, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+
+  if (data.count >= limit) {
+    return false
+  }
+
+  data.count++
+  return true
+}
+
+// app/api/contact/route.ts
+export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for') || 'unknown'
+
+  if (!checkRateLimit(ip, 5)) {
+    return Response.json(
+      { error: 'Too many requests' },
+      { status: 429 }
+    )
+  }
+
+  // Handle request...
+}
+```
+
+## CORS
+
+```tsx
+// app/api/public-data/route.ts
+
+export async function GET(request: Request) {
+  const data = { message: 'Public data' }
+
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
+}
+
+export async function OPTIONS(request: Request) {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
+}
+```
+
+## File Uploads
+
+```tsx
+// app/api/upload/route.ts
+
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const file = formData.get('file') as File
+
+  if (!file) {
+    return Response.json(
+      { error: 'No file provided' },
+      { status: 400 }
+    )
+  }
+
+  // Save file
+  const bytes = await file.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+
+  // Save to disk or cloud storage
+  // ...
+
+  return Response.json({
+    message: 'File uploaded',
+    filename: file.name,
+    size: file.size,
+  })
+}
+```
+
+## Middleware
+
+```tsx
+// middleware.ts (root of project)
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  // Log all API requests
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    console.log('API Request:', request.method, request.nextUrl.pathname)
+  }
+
+  // Add custom header
+  const response = NextResponse.next()
+  response.headers.set('X-Custom-Header', 'value')
+
+  return response
+}
+
+export const config = {
+  matcher: '/api/:path*',
+}
+```
+
+## Testing
+
+```tsx
+// __tests__/api/appointments.test.ts
+import { POST } from '@/app/api/appointments/route'
+
+describe('POST /api/appointments', () => {
+  it('should create appointment', async () => {
+    const request = new Request('http://localhost/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerName: 'Test User',
+        phone: '9812345678',
+        date: '2025-07-26',
+        time: '10:00 AM',
+      }),
+    })
+
+    const response = await POST(request)
+    const data = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(data).toHaveProperty('id')
+  })
+
+  it('should reject invalid data', async () => {
+    const request = new Request('http://localhost/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerName: 'X', // Too short
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+  })
+})
+```
+
+## Best Practices
+
+1. **Always validate input**
+```tsx
+const validated = schema.parse(body)
+```
+
+2. **Handle errors properly**
+```tsx
+try {
+  // logic
+} catch (error) {
+  return Response.json({ error: 'Message' }, { status: 500 })
+}
+```
+
+3. **Use proper status codes**
+- 200: Success
+- 201: Created
+- 400: Bad request
+- 401: Unauthorized
+- 404: Not found
+- 500: Server error
+
+4. **Authenticate sensitive endpoints**
+```tsx
+const session = await auth()
+if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+```
+
+5. **Rate limit public endpoints**
+```tsx
+if (!checkRateLimit(ip)) {
+  return Response.json({ error: 'Too many requests' }, { status: 429 })
+}
+```
+
+## Conclusion
+
+Next.js API routes give you a full backend without extra frameworks. Use them for:
+- CRUD operations
+- Authentication
+- File uploads
+- Webhooks
+- Third-party integrations
+
+Keep it simple. Start with basic routes, add features as needed.

@@ -1,0 +1,454 @@
+---
+title: "Git Commands I Use Every Day (No PhD Required)"
+excerpt: "Forget the 100+ git commands. Here are the 10 I actually use daily, with real examples and when to use each one."
+date: "2025-04-05"
+author: "Nischal Timalsina"
+tags: ["git", "workflow", "development", "tutorial"]
+published: true
+---
+
+# Git Commands I Use Every Day (No PhD Required)
+
+Git has like 150 commands. I use maybe 10 of them. Here's what actually matters.
+
+## The Core 5
+
+### 1. git status
+
+**What it does:** Shows what's changed
+
+```bash
+git status
+```
+
+**Output:**
+```
+On branch main
+Changes not staged for commit:
+  modified:   app/page.tsx
+
+Untracked files:
+  components/booking-form.tsx
+```
+
+**Use it:** All. The. Time. Before any other git command, run `git status`.
+
+### 2. git add
+
+**What it does:** Stages files for commit
+
+```bash
+# Add specific file
+git add app/page.tsx
+
+# Add all changed files
+git add .
+
+# Add all .tsx files
+git add *.tsx
+```
+
+**Tip:** Don't just `git add .` blindly. Check `git status` first.
+
+### 3. git commit
+
+**What it does:** Saves your changes
+
+```bash
+# With message
+git commit -m "Add booking form component"
+
+# Opens editor for longer message
+git commit
+
+# Add and commit in one step (only for modified files, not new files)
+git commit -am "Fix appointment date validation"
+```
+
+**Good commit messages:**
+```bash
+# ✅ Good
+git commit -m "Add SMS notification for appointment confirmations"
+git commit -m "Fix timezone bug in availability calculation"
+git commit -m "Update booking form validation"
+
+# ❌ Bad
+git commit -m "fix"
+git commit -m "updates"
+git commit -m "asdfasdf"
+```
+
+### 4. git push
+
+**What it does:** Sends commits to GitHub/GitLab
+
+```bash
+# Push to current branch
+git push
+
+# First time pushing a new branch
+git push -u origin feature-branch
+
+# Force push (careful!)
+git push -f
+```
+
+**When to use `-f`:** Only when you know what you're doing. Usually after rebasing.
+
+### 5. git pull
+
+**What it does:** Gets latest changes from remote
+
+```bash
+# Pull latest from current branch
+git pull
+
+# Pull and rebase instead of merge
+git pull --rebase
+```
+
+**Use before:** Starting work each day, or before creating a new branch.
+
+## Branching (The Right Way)
+
+### 6. git branch
+
+**What it does:** Lists/creates branches
+
+```bash
+# List all branches
+git branch
+
+# Create new branch
+git branch feature-sms-notifications
+
+# Delete branch
+git branch -d feature-sms-notifications
+
+# Force delete (if not merged)
+git branch -D feature-sms-notifications
+```
+
+### 7. git checkout / git switch
+
+**What it does:** Switches branches
+
+```bash
+# Old way (checkout)
+git checkout main
+git checkout -b new-feature
+
+# New way (switch - easier to remember)
+git switch main
+git switch -c new-feature
+```
+
+**I use:** `git switch` for branches, `git checkout` for files (see below).
+
+## My Daily Workflow
+
+```bash
+# Morning - start work
+git switch main
+git pull
+
+# Create feature branch
+git switch -c feature-booking-form
+
+# Work work work...
+# Edit files, test, etc.
+
+# Check what changed
+git status
+
+# Stage and commit
+git add app/booking/page.tsx components/booking-form.tsx
+git commit -m "Add booking form with date picker"
+
+# Push to GitHub
+git push -u origin feature-booking-form
+
+# Create pull request on GitHub
+# Get review, make changes...
+
+# After approval, merge PR on GitHub
+# Then locally:
+git switch main
+git pull
+git branch -d feature-booking-form
+```
+
+## Fixing Mistakes
+
+### 8. git restore
+
+**What it does:** Undoes changes
+
+```bash
+# Undo changes to a file (before staging)
+git restore app/page.tsx
+
+# Unstage a file (after git add)
+git restore --staged app/page.tsx
+
+# Restore from specific commit
+git restore --source=HEAD~1 app/page.tsx
+```
+
+**Use case:** "Oops, I broke this file. Start over."
+
+### 9. git reset
+
+**What it does:** Undoes commits
+
+```bash
+# Undo last commit, keep changes
+git reset HEAD~1
+
+# Undo last 3 commits, keep changes
+git reset HEAD~3
+
+# Undo commit and delete changes (careful!)
+git reset --hard HEAD~1
+```
+
+**Use case:** "I committed to the wrong branch" or "This commit is garbage."
+
+### 10. git stash
+
+**What it does:** Temporarily saves changes
+
+```bash
+# Save current changes
+git stash
+
+# Save with a message
+git stash save "WIP: booking form validation"
+
+# List stashes
+git stash list
+
+# Apply most recent stash
+git stash pop
+
+# Apply specific stash
+git stash apply stash@{0}
+
+# Delete stash
+git stash drop
+```
+
+**Use case:**
+```bash
+# You're working on feature A
+git status  # lots of changes
+
+# Emergency! Need to fix bug on main
+git stash
+git switch main
+git switch -c hotfix-urgent-bug
+# fix bug, commit, push
+git switch feature-a
+git stash pop  # continue where you left off
+```
+
+## Bonus: Useful Combos
+
+### See commit history
+
+```bash
+# Simple log
+git log
+
+# Pretty log
+git log --oneline --graph --all
+
+# Last 5 commits
+git log -5
+
+# Commits by author
+git log --author="Nischal"
+```
+
+### Check what changed
+
+```bash
+# See changes not staged
+git diff
+
+# See changes staged
+git diff --staged
+
+# See changes in specific file
+git diff app/page.tsx
+```
+
+### Undo that last commit message
+
+```bash
+# Oops, typo in commit message
+git commit --amend -m "Correct message"
+
+# Or open editor to fix
+git commit --amend
+```
+
+## Common Scenarios
+
+### "I committed to main instead of a new branch"
+
+```bash
+# Create new branch with current commit
+git branch feature-new-thing
+
+# Go back to main
+git switch main
+
+# Remove the commit from main
+git reset --hard HEAD~1
+
+# Switch to your feature branch
+git switch feature-new-thing
+```
+
+### "I need to update my branch with latest main"
+
+```bash
+git switch main
+git pull
+git switch feature-branch
+git merge main
+
+# Or, for cleaner history
+git rebase main
+```
+
+### "I want to undo my last push"
+
+```bash
+# Reset locally
+git reset --hard HEAD~1
+
+# Force push
+git push -f
+```
+
+**Warning:** Only do this if no one else has pulled your changes!
+
+### "I accidentally deleted a file"
+
+```bash
+# If not committed yet
+git restore filename.tsx
+
+# If committed
+git checkout HEAD filename.tsx
+```
+
+## My .gitconfig
+
+Make git easier with aliases:
+
+```bash
+# ~/.gitconfig
+[alias]
+    st = status
+    co = checkout
+    br = branch
+    cm = commit -m
+    aa = add .
+    last = log -1 HEAD
+    unstage = restore --staged
+    undo = reset HEAD~1
+```
+
+Now you can do:
+```bash
+git st
+git cm "Update component"
+git undo
+```
+
+## Git Tips
+
+### 1. Commit Often
+
+Don't wait until everything is perfect. Small commits are better.
+
+```bash
+# ❌ One giant commit
+git commit -m "Add entire booking system"
+
+# ✅ Small, focused commits
+git commit -m "Add booking form UI"
+git commit -m "Add form validation"
+git commit -m "Connect form to API"
+git commit -m "Add success message"
+```
+
+### 2. Write Useful Messages
+
+```bash
+# ❌ Bad
+git commit -m "fix"
+
+# ✅ Good
+git commit -m "Fix date validation in booking form"
+```
+
+### 3. Pull Before Push
+
+```bash
+# Always do this before pushing
+git pull
+git push
+```
+
+Avoids merge conflicts.
+
+### 4. Use Branches
+
+```bash
+# ❌ Don't work directly on main
+git switch main
+# make changes
+git commit -m "stuff"
+git push
+
+# ✅ Use branches
+git switch -c feature-name
+# make changes
+git commit -m "Add feature"
+git push -u origin feature-name
+# Create PR on GitHub
+```
+
+### 5. Don't Commit Secret Keys
+
+Create `.gitignore`:
+
+```
+# .gitignore
+.env
+.env.local
+node_modules/
+.DS_Store
+*.log
+```
+
+## That's It
+
+You don't need to know 150 git commands. These 10 cover 95% of daily work:
+
+1. `git status` - Check what's up
+2. `git add` - Stage files
+3. `git commit` - Save changes
+4. `git push` - Send to GitHub
+5. `git pull` - Get latest
+6. `git branch` - Manage branches
+7. `git switch` - Change branches
+8. `git restore` - Undo changes
+9. `git reset` - Undo commits
+10. `git stash` - Temporarily save work
+
+Learn these well. The rest you can Google when needed.

@@ -1,0 +1,311 @@
+---
+title: "Why Most SaaS Products Fail: Building Software People Actually Want to Use"
+excerpt: "After building multiple SaaS products, I've learned that great code isn't enough. Here's what separates products people love from those that languish unused."
+date: "2025-09-05"
+author: "Nischal Timalsina"
+tags: ["product", "saas", "entrepreneurship", "user-experience"]
+published: true
+---
+
+# Why Most SaaS Products Fail: Building Software People Actually Want to Use
+
+I've built enough failed side projects to recognize the pattern. Beautiful code, clean architecture, perfect test coverage... and zero users who actually want to use it.
+
+Here's what I wish someone had told me before I built Appointree.
+
+## The Problem Isn't Your Code
+
+Most technical founders make the same mistake I did: we think better engineering equals better products. But users don't care about your tech stack. They care about whether your product solves their problem.
+
+I spent three months building a perfect multi-tenant architecture before I talked to a single potential customer. When I finally did, I learned they didn't need half the features I'd built.
+
+**Lesson:** Build for users, not for your portfolio.
+
+## Start with the Problem, Not the Solution
+
+Bad approach:
+> "I want to build a SaaS appointment booking platform."
+
+Good approach:
+> "Hair salons are losing 20% of potential bookings because customers can't book outside business hours."
+
+See the difference? The first is about *what you want to build*. The second is about *a problem someone actually has*.
+
+### How I Found Appointree's Real Problem
+
+I interviewed 30 small business owners. I didn't ask "Would you use appointment booking software?" I asked:
+
+- "Walk me through how you schedule appointments today."
+- "What frustrates you about that process?"
+- "What would make that easier?"
+
+Pattern I found: Most already had *some* solution (paper book, Google Calendar, basic booking app). They didn't need "better software" – they needed software that integrated with how they actually worked.
+
+This changed everything. Instead of building "the best appointment booking app," I built integration with their existing tools (Google Calendar sync, SMS reminders they could send without opening the app, etc.).
+
+
+> **The real insight:** People won't adopt a better solution if it means changing their workflow. Your product needs to fit their process, not force them into yours.
+
+## The Minimum Lovable Product
+
+Forget Minimum Viable Product. **Build a Minimum *Lovable* Product.**
+
+MVP thinking says: "What's the least I can build to test the market?"
+
+MLP thinking says: "What's the smallest thing I can build that users will genuinely love?"
+
+The difference is crucial.
+
+### What I Cut from Appointree's V1
+
+**Originally planned:**
+- ✂️ Multi-location support
+- ✂️ Team scheduling
+- ✂️ Advanced analytics
+- ✂️ Custom branding
+- ✂️ API access
+- ✂️ Mobile apps
+
+**Actually built:**
+- ✅ Single location booking
+- ✅ Google Calendar sync (this was the killer feature)
+- ✅ SMS reminders
+- ✅ Simple availability rules
+- ✅ Customer management
+
+Result? V1 took 6 weeks instead of 6 months. And users loved it because those 5 features actually worked *really well*.
+
+## The 80/20 of Product Design
+
+### 80% of value comes from:
+1. **Solving one specific problem really well**
+2. **Making the core flow effortless**
+3. **Fast performance**
+4. **Simple, obvious UI**
+
+### 20% of value comes from:
+1. Advanced features
+2. Customization options
+3. Integrations
+4. Beautiful design (yes, really)
+
+I'm not saying design doesn't matter – it does. But users will tolerate ugly UI if the product solves their problem. They won't tolerate beautiful UI if the product is slow or confusing.
+
+## User Experience Isn't Design – It's Problem Solving
+
+Here's a real example from Appointree:
+
+**First version:** Booking flow had 5 steps:
+1. Select service
+2. Select date
+3. Select time
+4. Enter details
+5. Confirm
+
+Felt logical to me. Users bounced at step 3.
+
+**Why?** Turns out most people think in terms of "when do I need this service?" not "what service do I need?"
+
+**Fixed version:** New flow:
+1. Select date (calendar view)
+2. Select available time slot
+3. Choose service (filtered by what's available)
+4. Enter details
+5. Confirm
+
+Conversion rate went from 23% to 67%.
+
+Same features. Same design. Different *thinking about the user's mental model*.
+
+> **Warning:** Your mental model isn't the user's mental model. Watch people actually use your product (tools like Hotjar, FullStory, or just screen shares).
+
+## Speed is a Feature
+
+I obsessed over making Appointree fast. Not because I care about performance metrics, but because **every 100ms of delay costs you users.**
+
+Real metrics from our early beta:
+- Pages that load in <100ms: 78% completion rate
+- Pages that load in 100-300ms: 65% completion rate
+- Pages that load in 300-1000ms: 42% completion rate
+- Pages that load in >1000ms: 19% completion rate
+
+We weren't getting slower because of poor code. We were getting slower because I kept adding features.
+
+**Solution:** I implemented:
+- Server-side rendering for instant page loads
+- Optimistic UI updates (appear instant, sync in background)
+- Skeleton screens (feels faster even when it's not)
+- Aggressive caching
+
+Result: Average page load dropped from 800ms to 140ms. User engagement tripled.
+
+## The Onboarding Problem
+
+Most SaaS apps fail not because they're bad products, but because users don't understand how to use them.
+
+**First version of Appointree onboarding:**
+1. Sign up
+2. Blank dashboard with "Create your first appointment" button
+
+**Bounce rate:** 73%
+
+**Current version:**
+1. Sign up
+2. "Let's set up your first service" (3 fields, takes 30 seconds)
+3. "Great! Now let's set your availability" (pick hours, takes 1 minute)
+4. "Perfect! Here's your booking page: [link]" (immediately usable)
+
+**Bounce rate:** 31%
+
+Users who complete setup are 8x more likely to become paying customers.
+
+### The Secret: Show Value Before Asking for Work
+
+Every step in onboarding should give the user something valuable. Don't make them configure 10 settings before they see what your product does.
+
+Example:
+- ❌ "Enter your business hours" → feels like work
+- ✅ "When are you available for appointments?" → feels like progress toward their goal
+
+## Pricing: What Nobody Tells You
+
+I tried three pricing strategies:
+
+### 1. Freemium (Free + $29/mo Pro)
+- ✅ Easy to get users
+- ❌ 92% stayed on free plan forever
+- ❌ Cost more in infrastructure than revenue
+
+### 2. Free Trial (7 days, then $49/mo)
+- ✅ Higher conversion to paid (18%)
+- ❌ Most users tried it once and never came back
+- ❌ Felt pressured
+
+### 3. Pay Monthly ($39) or Yearly ($390)
+- ✅ Clear value proposition
+- ✅ Users who pay are invested
+- ✅ 34% choose annual (cash flow!)
+- ❌ Higher barrier to entry
+
+Winner: #3, but I offer a 14-day money-back guarantee. This gives the "try before you buy" feeling without the pressure of a trial ending.
+
+**Key insight:** Free users want to see if it's good. Paying users want to see if it solves their problem. These are different mindsets.
+
+## The Feature Trap
+
+Here's where most products fail: **Feature creep disguised as user feedback.**
+
+User feedback is crucial, but it's easy to misinterpret:
+- ❌ User says: "I need advanced reporting"
+- ❌ You build: Complex analytics dashboard
+- ❌ Result: Still doesn't use it
+
+- ✅ Better approach: "Why do you need that?"
+- ✅ User says: "I need to know which services are most popular"
+- ✅ You build: Simple popular services widget
+- ✅ Result: They use it every day
+
+### The Rule: Understand the Problem, Not the Solution
+
+Users are great at identifying problems. They're terrible at proposing solutions (no offense – it's not their job).
+
+When a user requests a feature:
+1. Ask "why?" at least 3 times
+2. Understand the underlying need
+3. Build the simplest solution to that need
+
+Often, the feature they request isn't what they actually need.
+
+## Building for Scale vs Building for Growth
+
+Early on, I wasted weeks "preparing for scale":
+- Microservices architecture
+- Kubernetes deployment
+- Redis caching
+- Load balancers
+
+We had 47 users.
+
+**Reality check:** You don't need to handle 10,000 concurrent users when you have 10 users. Build for what you need *now*, not what you *might* need later.
+
+My rule now:
+- **< 100 users:** Monolith, simple deployment
+- **< 1,000 users:** Start optimizing slow queries
+- **< 10,000 users:** Add caching layer
+- **10,000+ users:** Now you can think about microservices
+
+Premature optimization is the root of all evil. So is premature scaling.
+
+## What Actually Drives Growth
+
+In year one of Appointree:
+
+**What I thought would drive growth:**
+- ❌ Product Hunt launch
+- ❌ SEO content marketing
+- ❌ Paid ads
+
+**What actually drove growth:**
+- ✅ Word of mouth from happy users
+- ✅ Simple referral program (10% off for referrer and referee)
+- ✅ Integration with popular tools (Zapier, Google Calendar)
+
+Users don't share products because they're well-built. They share products that make their lives noticeably better.
+
+## The Uncomfortable Truth
+
+Most SaaS products fail not because of:
+- ❌ Bad code
+- ❌ Lack of features
+- ❌ Poor design
+- ❌ Wrong tech stack
+
+They fail because of:
+- ✅ Solving a problem nobody has
+- ✅ Solving a problem nobody will pay to solve
+- ✅ Being too complicated to understand
+- ✅ Forcing users to change their workflow
+
+## My Framework for Building Products People Want
+
+### 1. Problem Validation
+- Talk to 20+ potential users
+- Watch them do the thing your product will help with
+- Understand their *current* workflow
+- Find the biggest pain point
+
+### 2. Solution Validation
+- Build the absolute minimum to solve that one pain point
+- Not MVP – Minimum *Lovable* Product
+- Make it fast and simple, even if it's not pretty
+
+### 3. Usage Validation
+- Get 10 people actually using it
+- Watch them use it (screen shares, analytics, session recordings)
+- Iterate on confusion points
+- Don't add features – remove friction
+
+### 4. Market Validation
+- Get 10 people to pay for it
+- If they won't pay, understand why
+- Paying users are your real validators
+
+### 5. Growth
+- Only now start thinking about scale
+- Build referrals into the product
+- Make the core experience so good people can't help but share
+
+## Conclusion
+
+Building products is hard. Building products people *want to use* is harder. But it's not about having the best code or the most features.
+
+It's about:
+1. **Deeply understanding a real problem**
+2. **Building the simplest solution to that problem**
+3. **Making it effortless to use**
+4. **Iterating based on real usage, not assumptions**
+
+
+> Appointree isn't successful because it has the best architecture or the most features. It's successful because it solves one problem really well: making it easy for small businesses to take online bookings. \ That's it. Everything else is details.
+
+Start with the problem. Everything else follows.

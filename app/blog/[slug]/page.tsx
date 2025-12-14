@@ -11,7 +11,7 @@ import { notFound } from "next/navigation"
 import type { Components } from "react-markdown"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { toast } from "sonner"
+import { highlight } from "sugar-high"
 
 export async function generateStaticParams() {
   const posts = getAllPosts()
@@ -92,23 +92,52 @@ export default async function BlogPost({ params }: Props) {
       </blockquote>
     ),
     code: ({ children, className }) => {
+      const codeString = String(children).trim()
       const isInline = !className?.includes("language-")
-      return isInline ? (
-        <code className="bg-input/50 rounded px-1.5 py-0.5 font-mono text-xs">
-          {children}
-        </code>
-      ) : (
-        <code className="block font-mono text-xs">
-          <CopyButton>{children}</CopyButton>
-          {children}
-        </code>
+
+      if (isInline) {
+        return (
+          <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-[13px]">
+            {children}
+          </code>
+        )
+      }
+
+      // Apply syntax highlighting for code blocks
+      const highlightedCode = highlight(codeString)
+
+      return (
+        <code
+          className="block font-mono text-[13px]"
+          dangerouslySetInnerHTML={{ __html: highlightedCode }}
+        />
       )
     },
-    pre: ({ children }) => (
-      <pre className="bg-input/50 group relative my-4 overflow-x-auto rounded-lg border p-4">
-        {children}
-      </pre>
-    ),
+    pre: ({ children }) => {
+      // Extract plain text from code element for copy button
+      const extractText = (node: unknown): string => {
+        if (typeof node === "string") return node
+        if (node && typeof node === "object" && "props" in node) {
+          const nodeObj = node as { props?: { children?: unknown } }
+          if (nodeObj.props?.children) {
+            if (Array.isArray(nodeObj.props.children)) {
+              return nodeObj.props.children.map(extractText).join("")
+            }
+            return extractText(nodeObj.props.children)
+          }
+        }
+        return ""
+      }
+
+      const codeContent = extractText(children)
+
+      return (
+        <pre className="group bg-input/40 relative my-4 overflow-x-auto rounded-lg border p-4 text-sm">
+          {children}
+          <CopyButton content={codeContent} />
+        </pre>
+      )
+    },
     a: ({ href, children }) => (
       <a
         href={href}

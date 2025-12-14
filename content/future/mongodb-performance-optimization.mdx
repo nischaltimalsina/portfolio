@@ -1,0 +1,545 @@
+---
+title: "MongoDB Performance: Schema Design and Query Optimization for SaaS"
+excerpt: "Practical lessons learned from optimizing MongoDB queries and schema design in a multi-tenant SaaS application handling thousands of appointments daily."
+date: "2025-05-22"
+author: "Nischal Timalsina"
+tags: ["mongodb", "database", "performance", "optimization"]
+published: true
+---
+
+# MongoDB Performance: Schema Design and Query Optimization for SaaS
+
+When Appointree's appointment queries started taking 2+ seconds, I learned that MongoDB's flexibility is both its biggest strength and potential weakness. Here's what I learned about making MongoDB fast at scale.
+
+## The Problem
+
+```typescript
+// This query was killing us
+const appointments = await db.appointments.find({
+  startTime: {
+    $gte: startOfDay,
+    $lte: endOfDay
+  },
+  tenantId: currentTenantId,
+}).toArray()
+
+// 2.3 seconds for 10,000 documents 😱
+```
+
+## The Solution
+
+```typescript
+// After optimization
+const appointments = await db.appointments.find({
+  tenantId: currentTenantId,  // Put tenant filter FIRST
+  startTime: {
+    $gte: startOfDay,
+    $lte: endOfDay
+  },
+}).hint({ tenantId: 1, startTime: 1 }).toArray()
+
+// 87ms for same dataset ✨
+```
+
+What changed? **Index order matters.**
+
+## Understanding MongoDB Indexes
+
+### 1. Compound Indexes
+
+The order of fields in a compound index is crucial:
+
+```typescript
+// ❌ Wrong order
+db.appointments.createIndex({ startTime: 1, tenantId: 1 })
+
+// ✅ Right order
+db.appointments.createIndex({ tenantId: 1, startTime: 1 })
+```
+
+**Rule:** Put equality filters before range filters.
+
+```typescript
+// Query pattern
+db.appointments.find({
+  tenantId: 'tenant-123',  // Equality - use this first in index
+  startTime: { $gte: date } // Range - use this second
+})
+```
+
+### 2. Index Prefixes
+
+MongoDB can use "index prefixes" efficiently:
+
+```typescript
+// Index
+{ tenantId: 1, providerId: 1, startTime: 1 }
+
+// These queries can all use the index:
+{ tenantId: 'x' }                                    // ✅ Uses prefix
+{ tenantId: 'x', providerId: 'y' }                   // ✅ Uses prefix
+{ tenantId: 'x', providerId: 'y', startTime: date }  // ✅ Full index
+
+// These cannot:
+{ providerId: 'y' }                                  // ❌ Missing tenantId
+{ startTime: date }                                  // ❌ Missing tenantId
+```
+
+### 3. Covering Indexes
+
+Make queries super fast by including all queried fields in the index:
+
+```typescript
+// Index includes all fields we're fetching
+db.appointments.createIndex({
+  tenantId: 1,
+  startTime: 1,
+  customerId: 1,
+  status: 1,
+})
+
+// Query is "covered" - never touches documents
+db.appointments.find(
+  { tenantId: 'x', startTime: { $gte: date } },
+  { customerId: 1, status: 1, _id: 0 } // Only return indexed fields
+)
+```
+
+> Covered queries read only the index, not the actual documents. They're incredibly fast.
+
+## Schema Design Patterns
+
+### 1. Embedding vs Referencing
+
+**Embed when:**
+- Data is accessed together
+- Data doesn't change often
+- Size is bounded
+
+```typescript
+// ✅ Good - customer info rarely changes
+interface Appointment {
+  _id: string
+  customer: {
+    id: string
+    name: string
+    email: string
+  }
+  startTime: Date
+  // ...
+}
+```
+
+**Reference when:**
+- Data is large
+- Data changes frequently
+- Data is shared across documents
+
+```typescript
+// ✅ Good - service can change independently
+interface Appointment {
+  _id: string
+  serviceId: string // Reference to services collection
+  customerId: string // Reference to customers collection
+  // ...
+}
+```
+
+### 2. Pre-Computed Values
+
+Don't calculate on read – store computed values:
+
+```typescript
+// ❌ Slow - calculate on every query
+interface Appointment {
+  startTime: Date
+  duration: number
+}
+
+// Query
+const appointments = await db.appointments.find({
+  startTime: { $lte: now },
+  // Can't filter by endTime!
+})
+
+// ✅ Fast - pre-compute endTime
+interface Appointment {
+  startTime: Date
+  endTime: Date // Computed: startTime + duration
+  duration: number
+}
+
+// Index
+db.appointments.createIndex({ tenantId: 1, endTime: 1 })
+
+// Query - can filter efficiently
+const appointments = await db.appointments.find({
+  tenantId: 'x',
+  endTime: { $gte: now },
+})
+```
+
+### 3. Bucketing for Time-Series Data
+
+For time-series or metrics data:
+
+```typescript
+// ❌ Bad - one document per appointment
+interface AppointmentMetric {
+  tenantId: string
+  date: Date
+  appointmentCount: number
+}
+// Result: Millions of tiny documents
+
+// ✅ Good - bucket by day
+interface DailyMetrics {
+  tenantId: string
+  date: Date
+  hourlyBreakdown: {
+    hour: number
+    appointmentCount: number
+    revenue: number
+  }[]
+}
+// Result: One document per tenant per day
+```
+
+### 4. Polymorphic Pattern
+
+Different types in the same collection:
+
+```typescript
+interface BaseAppointment {
+  _id: string
+  type: 'in-person' | 'virtual'
+  tenantId: string
+  startTime: Date
+  // ... common fields
+}
+
+interface InPersonAppointment extends BaseAppointment {
+  type: 'in-person'
+  locationId: string
+  roomId?: string
+}
+
+interface VirtualAppointment extends BaseAppointment {
+  type: 'virtual'
+  meetingLink: string
+  platform: 'zoom' | 'teams' | 'meet'
+}
+
+type Appointment = InPersonAppointment | VirtualAppointment
+
+// Index on type field for fast filtering
+db.appointments.createIndex({ tenantId: 1, type: 1, startTime: 1 })
+```
+
+## Query Optimization Techniques
+
+### 1. Use Projection
+
+Only fetch what you need:
+
+```typescript
+// ❌ Fetches entire 5KB document
+const appointments = await db.appointments.find({
+  tenantId: 'x',
+}).toArray()
+
+// ✅ Fetches only 500 bytes
+const appointments = await db.appointments.find(
+  { tenantId: 'x' },
+  {
+    projection: {
+      startTime: 1,
+      customerId: 1,
+      status: 1
+    }
+  }
+).toArray()
+```
+
+### 2. Limit Results
+
+```typescript
+// ❌ Fetches all matching documents
+const appointments = await db.appointments.find({
+  tenantId: 'x',
+}).toArray()
+
+// ✅ Only fetch what you'll display
+const appointments = await db.appointments.find({
+  tenantId: 'x',
+}).limit(50).toArray()
+```
+
+### 3. Use Aggregation Pipeline Wisely
+
+```typescript
+// ❌ Slow - processes all documents then filters
+const stats = await db.appointments.aggregate([
+  {
+    $group: {
+      _id: '$status',
+      count: { $sum: 1 },
+    },
+  },
+  {
+    $match: {
+      _id: { $in: ['confirmed', 'pending'] },
+    },
+  },
+]).toArray()
+
+// ✅ Fast - filter first, then group
+const stats = await db.appointments.aggregate([
+  {
+    $match: {
+      tenantId: 'x',
+      status: { $in: ['confirmed', 'pending'] },
+    },
+  },
+  {
+    $group: {
+      _id: '$status',
+      count: { $sum: 1 },
+    },
+  },
+]).toArray()
+```
+
+### 4. Explain Your Queries
+
+```typescript
+const explain = await db.appointments
+  .find({ tenantId: 'x', startTime: { $gte: date } })
+  .explain('executionStats')
+
+console.log({
+  indexUsed: explain.executionStats.executionStages.indexName,
+  docsExamined: explain.executionStats.totalDocsExamined,
+  docsReturned: explain.executionStats.nReturned,
+  executionTime: explain.executionStats.executionTimeMillis,
+})
+```
+
+Look for:
+- **totalDocsExamined ≈ nReturned** (good - not scanning extra docs)
+- **executionStages.stage === 'IXSCAN'** (good - using index)
+- **executionStages.stage === 'COLLSCAN'** (bad - full collection scan)
+
+## Advanced Optimization
+
+### 1. Partial Indexes
+
+Index only documents that match certain criteria:
+
+```typescript
+// Only index active appointments
+db.appointments.createIndex(
+  { tenantId: 1, startTime: 1 },
+  {
+    partialFilterExpression: {
+      status: { $in: ['pending', 'confirmed'] }
+    }
+  }
+)
+
+// Smaller index, faster queries for active appointments
+```
+
+### 2. TTL Indexes
+
+Auto-delete old documents:
+
+```typescript
+// Automatically delete cancelled appointments after 30 days
+db.appointments.createIndex(
+  { cancelledAt: 1 },
+  {
+    expireAfterSeconds: 30 * 24 * 60 * 60,
+    partialFilterExpression: {
+      status: 'cancelled'
+    }
+  }
+)
+```
+
+### 3. Text Indexes
+
+For search functionality:
+
+```typescript
+// Create text index
+db.appointments.createIndex({
+  'customer.name': 'text',
+  'customer.email': 'text',
+  notes: 'text',
+})
+
+// Search
+const results = await db.appointments.find({
+  $text: { $search: 'john smith' },
+}).toArray()
+```
+
+### 4. Geospatial Indexes
+
+For location-based queries:
+
+```typescript
+// Index
+db.locations.createIndex({ coordinates: '2dsphere' })
+
+// Find nearby locations
+const nearby = await db.locations.find({
+  coordinates: {
+    $near: {
+      $geometry: {
+        type: 'Point',
+        coordinates: [longitude, latitude],
+      },
+      $maxDistance: 5000, // 5km
+    },
+  },
+}).toArray()
+```
+
+## Monitoring and Profiling
+
+### 1. Enable Profiling
+
+```typescript
+// Enable slow query logging
+db.setProfilingLevel(1, { slowms: 100 })
+
+// View slow queries
+db.system.profile.find({
+  millis: { $gt: 100 },
+}).sort({ ts: -1 }).limit(10)
+```
+
+### 2. Monitor Index Usage
+
+```typescript
+// See which indexes are used
+db.appointments.aggregate([
+  { $indexStats: {} }
+])
+```
+
+### 3. Check Index Size
+
+```typescript
+db.appointments.stats().indexSizes
+// { '_id_': 245760, 'tenantId_1_startTime_1': 425984 }
+```
+
+## Common Mistakes
+
+**1. Creating Too Many Indexes**
+
+Every index slows down writes. Be selective.
+
+```typescript
+// ❌ Bad - 10 indexes on one collection
+db.appointments.createIndex({ tenantId: 1 })
+db.appointments.createIndex({ customerId: 1 })
+db.appointments.createIndex({ providerId: 1 })
+db.appointments.createIndex({ startTime: 1 })
+// ... and 6 more
+
+// ✅ Good - Compound indexes cover multiple queries
+db.appointments.createIndex({ tenantId: 1, startTime: 1 })
+db.appointments.createIndex({ tenantId: 1, customerId: 1 })
+db.appointments.createIndex({ tenantId: 1, providerId: 1 })
+```
+
+**2. Not Considering Write Performance**
+
+Indexes speed up reads but slow down writes.
+
+```typescript
+// If you're doing 1000 writes/sec, each index adds ~5% overhead
+// 10 indexes = 50% slower writes!
+
+// Balance read vs write performance based on your use case
+```
+
+**3. Inefficient Updates**
+
+Update only what changed:
+
+```typescript
+// ❌ Slow - rewrites entire document
+await db.appointments.updateOne(
+  { _id: appointmentId },
+  { $set: entireAppointmentObject }
+)
+
+// ✅ Fast - updates only status
+await db.appointments.updateOne(
+  { _id: appointmentId },
+  { $set: { status: 'confirmed', updatedAt: new Date() } }
+)
+```
+
+## Real-World Example
+
+Here's how I optimized Appointree's appointment listing:
+
+**Before:**
+```typescript
+const appointments = await db.appointments.find({
+  $or: [
+    { customerId: userId },
+    { providerId: userId },
+  ],
+  startTime: { $gte: new Date() },
+}).toArray()
+
+// 3.2 seconds, scanned 50,000 docs
+```
+
+**After:**
+```typescript
+// 1. Added compound indexes
+db.appointments.createIndex({ tenantId: 1, customerId: 1, startTime: 1 })
+db.appointments.createIndex({ tenantId: 1, providerId: 1, startTime: 1 })
+
+// 2. Removed $or (requires full collection scan)
+const [customerAppts, providerAppts] = await Promise.all([
+  db.appointments.find({
+    tenantId,
+    customerId: userId,
+    startTime: { $gte: new Date() },
+  }).toArray(),
+
+  db.appointments.find({
+    tenantId,
+    providerId: userId,
+    startTime: { $gte: new Date() },
+  }).toArray(),
+])
+
+const appointments = [...customerAppts, ...providerAppts]
+  .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+
+// 92ms, scanned 150 docs total ✨
+```
+
+## Conclusion
+
+MongoDB performance comes down to:
+
+1. **Index strategically** – equality before range, include tenant filter
+2. **Design schema for queries** – embed vs reference based on access patterns
+3. **Project and limit** – fetch only what you need
+4. **Monitor and profile** – measure before optimizing
+5. **Test at scale** – 100 docs is different from 100,000
+
+
+> These optimizations took Appointree's average query time from 2.3s to 87ms – a 26x improvement. Understanding your data access patterns is key.
+

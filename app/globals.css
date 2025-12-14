@@ -162,3 +162,40 @@
     border-radius: 0.25rem;
   }
 }
+
+/* Sugar-high syntax highlighting */
+pre code {
+  display: block;
+  overflow-x: auto;
+  --sh-class: #2d5e9d;
+  --sh-identifier: #354150;
+  --sh-sign: #8996a3;
+  --sh-property: #0550ae;
+  --sh-entity: #249a97;
+  --sh-jsxliterals: #6266d1;
+  --sh-string: #00a99a;
+  --sh-keyword: #f47067;
+  --sh-comment: #a19595;
+}
+
+.dark pre code {
+  --sh-class: #4c97f8;
+  --sh-identifier: #fff;
+  --sh-keyword: #f47067;
+  --sh-string: #0fa295;
+  --sh-sign: #8996a3;
+  --sh-comment: #a19595;
+  --sh-jsxliterals: #6266d1;
+  --sh-property: #0550ae;
+  --sh-entity: #249a97;
+}
+
+pre code .sh__class { color: var(--sh-class); }
+pre code .sh__identifier { color: var(--sh-identifier); }
+pre code .sh__sign { color: var(--sh-sign); }
+pre code .sh__property { color: var(--sh-property); }
+pre code .sh__entity { color: var(--sh-entity); }
+pre code .sh__jsxliterals { color: var(--sh-jsxliterals); }
+pre code .sh__string { color: var(--sh-string); }
+pre code .sh__keyword { color: var(--sh-keyword); }
+pre code .sh__comment { color: var(--sh-comment); }

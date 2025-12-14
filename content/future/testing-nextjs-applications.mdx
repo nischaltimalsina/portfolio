@@ -1,0 +1,645 @@
+---
+title: "Testing Next.js Applications: A Pragmatic Approach"
+excerpt: "Testing doesn't have to be all-or-nothing. Here's my practical approach to testing Next.js apps: what to test, what to skip, and how to maintain tests that actually provide value."
+date: "2025-11-12"
+author: "Nischal Timalsina"
+tags: ["testing", "nextjs", "react", "typescript", "quality-assurance"]
+published: true
+---
+
+# Testing Next.js Applications: A Pragmatic Approach
+
+I used to think 100% test coverage was the goal. Then I spent two months maintaining brittle tests that broke with every UI change while real bugs slipped through.
+
+Here's what I learned about testing that actually improves code quality.
+
+## The Testing Pyramid (Revised for Web Apps)
+
+Traditional testing pyramid says:
+```
+      /\
+     /E2E\
+    /─────\
+   /  API  \
+  /─────────\
+ /   Unit    \
+/─────────────\
+```
+
+But for modern web apps with server components, I use this:
+```
+      /\
+     /E2E\        ← Critical user flows (10% of tests)
+    /─────\
+   / Inte-\       ← API routes, data fetching (30% of tests)
+  / gration\
+ /──────────\
+/   Unit     \    ← Business logic, utilities (60% of tests)
+/─────────────\
+```
+
+## What to Test (and What to Skip)
+
+### ✅ Always Test
+
+**1. Business Logic**
+
+```typescript
+// lib/availability.ts
+export function calculateAvailableSlots(
+  businessHours: BusinessHours[],
+  existingBookings: Booking[],
+  serviceDuration: number
+): TimeSlot[] {
+  // Complex logic here
+}
+
+// __tests__/availability.test.ts
+describe('calculateAvailableSlots', () => {
+  it('should exclude booked slots', () => {
+    const businessHours = [
+      { day: 'monday', open: '09:00', close: '17:00' }
+    ]
+    const bookings = [
+      { startTime: '10:00', endTime: '11:00' }
+    ]
+
+    const slots = calculateAvailableSlots(businessHours, bookings, 60)
+
+    expect(slots).not.toContainEqual(
+      expect.objectContaining({ time: '10:00' })
+    )
+  })
+})
+```
+
+**2. API Routes**
+
+```typescript
+// app/api/appointments/route.test.ts
+import { POST } from './route'
+
+describe('POST /api/appointments', () => {
+  it('should create appointment with valid data', async () => {
+    const req = new Request('http://localhost/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerId: 'customer-1',
+        serviceId: 'service-1',
+        startTime: '2025-12-15T10:00:00Z',
+      }),
+    })
+
+    const res = await POST(req)
+    const data = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(data).toHaveProperty('id')
+  })
+
+  it('should reject invalid data', async () => {
+    const req = new Request('http://localhost/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        // Missing required fields
+      }),
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(400)
+  })
+})
+```
+
+**3. Data Validation (Zod Schemas)**
+
+```typescript
+// lib/validations/appointment.test.ts
+import { CreateAppointmentSchema } from './appointment'
+
+describe('CreateAppointmentSchema', () => {
+  it('should accept valid appointment', () => {
+    const validData = {
+      customerId: 'customer-1',
+      serviceId: 'service-1',
+      startTime: new Date('2025-12-15T10:00:00Z'),
+    }
+
+    const result = CreateAppointmentSchema.safeParse(validData)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject past dates', () => {
+    const invalidData = {
+      customerId: 'customer-1',
+      serviceId: 'service-1',
+      startTime: new Date('2020-01-01T10:00:00Z'),
+    }
+
+    const result = CreateAppointmentSchema.safeParse(invalidData)
+
+    expect(result.success).toBe(false)
+  })
+})
+```
+
+**4. Critical User Flows (E2E)**
+
+```typescript
+// e2e/booking-flow.spec.ts
+import { test, expect } from '@playwright/test'
+
+test('complete booking flow', async ({ page }) => {
+  // Go to booking page
+  await page.goto('/book')
+
+  // Select service
+  await page.click('text=Haircut')
+  await page.click('text=Next')
+
+  // Select date
+  await page.click('[data-date="2025-12-15"]')
+
+  // Select time
+  await page.click('text=10:00 AM')
+
+  // Fill details
+  await page.fill('[name="name"]', 'John Doe')
+  await page.fill('[name="email"]', 'john@example.com')
+  await page.fill('[name="phone"]', '555-0123')
+
+  // Submit
+  await page.click('text=Book Appointment')
+
+  // Verify success
+  await expect(page.locator('text=Booking confirmed')).toBeVisible()
+})
+```
+
+### ❌ Skip Testing
+
+**1. UI Styling**
+
+```typescript
+// ❌ Don't test this
+it('should have blue background', () => {
+  render(<Button />)
+  expect(screen.getByRole('button')).toHaveClass('bg-blue-500')
+})
+
+// ✅ Visual regression testing is better (Chromatic, Percy)
+```
+
+**2. Third-Party Libraries**
+
+```typescript
+// ❌ Don't test React Query
+it('should cache data', () => {
+  // Testing React Query's caching mechanism
+})
+
+// ✅ Trust the library, test your usage
+it('should fetch appointments on mount', () => {
+  render(<AppointmentList />)
+  expect(screen.getByText('Loading...')).toBeInTheDocument()
+})
+```
+
+**3. Static Content**
+
+```typescript
+// ❌ Don't test static rendering
+it('should render heading', () => {
+  render(<Page />)
+  expect(screen.getByText('Welcome')).toBeInTheDocument()
+})
+
+// ✅ E2E tests cover this naturally
+```
+
+## Testing Patterns
+
+### 1. Test Data Builders
+
+```typescript
+// __tests__/helpers/builders.ts
+export function buildAppointment(
+  overrides?: Partial<Appointment>
+): Appointment {
+  return {
+    _id: 'appointment-1',
+    tenantId: 'tenant-1',
+    customerId: 'customer-1',
+    providerId: 'provider-1',
+    serviceId: 'service-1',
+    startTime: new Date('2025-12-15T10:00:00Z'),
+    endTime: new Date('2025-12-15T11:00:00Z'),
+    status: 'confirmed',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  }
+}
+
+// Usage
+it('should calculate total revenue', () => {
+  const appointments = [
+    buildAppointment({ serviceId: 'haircut' }), // $50
+    buildAppointment({ serviceId: 'color' }),   // $100
+  ]
+
+  expect(calculateRevenue(appointments)).toBe(150)
+})
+```
+
+### 2. Mock Factories
+
+```typescript
+// __tests__/mocks/db.ts
+import { vi } from 'vitest'
+
+export function mockDB() {
+  const appointments = new Map()
+
+  return {
+    appointments: {
+      find: vi.fn((query) => {
+        const results = Array.from(appointments.values())
+          .filter(apt => apt.tenantId === query.tenantId)
+        return { toArray: async () => results }
+      }),
+
+      create: vi.fn((data) => {
+        const id = `appointment-${appointments.size + 1}`
+        const appointment = { _id: id, ...data }
+        appointments.set(id, appointment)
+        return Promise.resolve(appointment)
+      }),
+
+      clear: () => appointments.clear(),
+    },
+  }
+}
+
+// Usage
+describe('Appointments API', () => {
+  const db = mockDB()
+
+  beforeEach(() => {
+    db.appointments.clear()
+  })
+
+  it('should create appointment', async () => {
+    const appointment = await db.appointments.create({
+      customerId: 'customer-1',
+      // ...
+    })
+
+    expect(appointment).toHaveProperty('_id')
+  })
+})
+```
+
+### 3. Component Testing with React Testing Library
+
+```typescript
+// components/appointment-card.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react'
+import { AppointmentCard } from './appointment-card'
+import { buildAppointment } from '@/__tests__/helpers/builders'
+
+describe('AppointmentCard', () => {
+  it('should display appointment details', () => {
+    const appointment = buildAppointment({
+      customer: { name: 'John Doe' },
+      service: { name: 'Haircut' },
+      startTime: new Date('2025-12-15T10:00:00Z'),
+    })
+
+    render(<AppointmentCard appointment={appointment} />)
+
+    expect(screen.getByText('John Doe')).toBeInTheDocument()
+    expect(screen.getByText('Haircut')).toBeInTheDocument()
+    expect(screen.getByText(/10:00 AM/)).toBeInTheDocument()
+  })
+
+  it('should call onCancel when cancel button clicked', () => {
+    const onCancel = vi.fn()
+    const appointment = buildAppointment()
+
+    render(
+      <AppointmentCard
+        appointment={appointment}
+        onCancel={onCancel}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Cancel'))
+
+    expect(onCancel).toHaveBeenCalledWith(appointment._id)
+  })
+})
+```
+
+## Integration Testing
+
+### Testing with Next.js App Router
+
+```typescript
+// __tests__/integration/appointments.test.ts
+import { GET, POST } from '@/app/api/appointments/route'
+import { auth } from '@/lib/auth'
+
+vi.mock('@/lib/auth')
+
+describe('Appointments API Integration', () => {
+  beforeEach(() => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: 'user-1',
+        tenantId: 'tenant-1',
+        role: 'admin',
+      },
+    } as any)
+  })
+
+  it('should list appointments for tenant', async () => {
+    const req = new Request('http://localhost/api/appointments')
+    const res = await GET(req)
+    const data = await res.json()
+
+    expect(data).toBeInstanceOf(Array)
+    expect(data.every(apt => apt.tenantId === 'tenant-1')).toBe(true)
+  })
+
+  it('should prevent cross-tenant access', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: 'user-2',
+        tenantId: 'tenant-2',
+        role: 'admin',
+      },
+    } as any)
+
+    const req = new Request('http://localhost/api/appointments')
+    const res = await GET(req)
+    const data = await res.json()
+
+    expect(data.every(apt => apt.tenantId === 'tenant-2')).toBe(true)
+  })
+})
+```
+
+## E2E Testing with Playwright
+
+### Setup
+
+```typescript
+// playwright.config.ts
+import { defineConfig } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
+
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
+})
+```
+
+### Page Object Pattern
+
+```typescript
+// e2e/pages/booking.page.ts
+import { Page } from '@playwright/test'
+
+export class BookingPage {
+  constructor(private page: Page) {}
+
+  async goto() {
+    await this.page.goto('/book')
+  }
+
+  async selectService(serviceName: string) {
+    await this.page.click(`text=${serviceName}`)
+    await this.page.click('text=Next')
+  }
+
+  async selectDate(date: string) {
+    await this.page.click(`[data-date="${date}"]`)
+  }
+
+  async selectTime(time: string) {
+    await this.page.click(`text=${time}`)
+  }
+
+  async fillDetails(details: {
+    name: string
+    email: string
+    phone: string
+  }) {
+    await this.page.fill('[name="name"]', details.name)
+    await this.page.fill('[name="email"]', details.email)
+    await this.page.fill('[name="phone"]', details.phone)
+  }
+
+  async submit() {
+    await this.page.click('text=Book Appointment')
+  }
+
+  async expectSuccess() {
+    await this.page.waitForSelector('text=Booking confirmed')
+  }
+}
+
+// Usage
+test('booking flow', async ({ page }) => {
+  const bookingPage = new BookingPage(page)
+
+  await bookingPage.goto()
+  await bookingPage.selectService('Haircut')
+  await bookingPage.selectDate('2025-12-15')
+  await bookingPage.selectTime('10:00 AM')
+  await bookingPage.fillDetails({
+    name: 'John Doe',
+    email: 'john@example.com',
+    phone: '555-0123',
+  })
+  await bookingPage.submit()
+  await bookingPage.expectSuccess()
+})
+```
+
+## Performance Testing
+
+```typescript
+// __tests__/performance/availability.test.ts
+import { calculateAvailableSlots } from '@/lib/availability'
+
+describe('Performance: calculateAvailableSlots', () => {
+  it('should complete in < 100ms for typical load', () => {
+    const businessHours = generateBusinessHours()
+    const bookings = generateBookings(1000) // 1000 existing bookings
+
+    const start = performance.now()
+    calculateAvailableSlots(businessHours, bookings, 60)
+    const end = performance.now()
+
+    expect(end - start).toBeLessThan(100)
+  })
+})
+```
+
+## Test Coverage
+
+### What Good Coverage Looks Like
+
+```
+File                    | % Stmts | % Branch | % Funcs | % Lines
+------------------------|---------|----------|---------|--------
+lib/availability.ts     |   100   |   100    |   100   |   100
+lib/validations/        |   100   |   100    |   100   |   100
+app/api/                |    95   |    90    |    95   |    95
+components/ui/          |    60   |    55    |    65   |    60
+components/features/    |    75   |    70    |    75   |    75
+```
+
+Notice:
+- **Business logic: 100%** (critical, pure functions)
+- **Validation: 100%** (prevents bugs at boundaries)
+- **API routes: 95%** (important but some edge cases acceptable)
+- **UI components: 60-75%** (lower is ok, E2E tests cover this)
+
+### Don't Chase 100%
+
+```typescript
+// ❌ Testing for coverage's sake
+it('should render loading state', () => {
+  render(<Component isLoading={true} />)
+  expect(screen.getByText('Loading...')).toBeInTheDocument()
+})
+
+it('should render success state', () => {
+  render(<Component isLoading={false} />)
+  expect(screen.getByText('Success')).toBeInTheDocument()
+})
+
+// ✅ Test meaningful behavior
+it('should show loading then data', async () => {
+  const { rerender } = render(<Component isLoading={true} />)
+  expect(screen.getByText('Loading...')).toBeInTheDocument()
+
+  rerender(<Component isLoading={false} data={mockData} />)
+  expect(screen.getByText(mockData.title)).toBeInTheDocument()
+})
+```
+
+## My Testing Workflow
+
+### 1. TDD for Business Logic
+
+```typescript
+// Write test first
+describe('calculateDiscount', () => {
+  it('should apply 10% discount for returning customers', () => {
+    expect(calculateDiscount(100, true)).toBe(90)
+  })
+})
+
+// Implement
+export function calculateDiscount(
+  price: number,
+  isReturning: boolean
+): number {
+  return isReturning ? price * 0.9 : price
+}
+
+// Refine
+describe('calculateDiscount', () => {
+  it('should apply 10% discount for returning customers', () => {
+    expect(calculateDiscount(100, true)).toBe(90)
+  })
+
+  it('should not discount for new customers', () => {
+    expect(calculateDiscount(100, false)).toBe(100)
+  })
+
+  it('should not discount below $10', () => {
+    expect(calculateDiscount(15, true)).toBe(13.5)
+    expect(calculateDiscount(10, true)).toBe(10) // Minimum
+  })
+})
+```
+
+### 2. Test After for UI
+
+For UI components, I write tests after building to document behavior:
+
+```typescript
+// Build component first, then document with tests
+describe('AppointmentCard', () => {
+  it('shows customer name and service', () => {
+    // Documents expected behavior
+  })
+
+  it('shows formatted time', () => {
+    // Documents time formatting
+  })
+
+  it('calls onCancel when cancelled', () => {
+    // Documents interaction
+  })
+})
+```
+
+### 3. E2E for Critical Paths
+
+One E2E test per critical user journey:
+- User signs up → creates first appointment
+- Customer books appointment → receives confirmation
+- Admin cancels appointment → customer gets notification
+
+## Conclusion
+
+Good testing isn't about coverage percentage. It's about:
+
+1. **Catching bugs before production**
+2. **Documenting expected behavior**
+3. **Enabling confident refactoring**
+4. **Not slowing down development**
+
+> My rule: If removing a test wouldn't make you less confident deploying, remove it. Tests are code too – they have a maintenance cost.
+
+**Test priorities:**
+1. Business logic (pure functions)
+2. Data validation
+3. API routes
+4. Critical user flows
+5. Everything else (if time permits)
+
+Write fewer, better tests.
