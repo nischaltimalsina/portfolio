@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils"
 import { ArrowUpRightIcon } from "@heroicons/react/24/outline"
+import { Metadata } from "next"
 import Link from "next/link"
 
 const work = [
@@ -56,7 +57,7 @@ const ventures = [
   },
   {
     company: "Appointree",
-    role: "Co-Founder / Organizer",
+    role: "Founder",
     summary:
       "A simple and efficient appointment booking platform designed to streamline scheduling for businesses and clients alike.",
     link: "https://appointree.dev",
@@ -104,6 +105,12 @@ const websites = [
     status: "Archived",
   },
 ]
+
+export const metadata: Metadata = {
+  title: "Work — Nischal Timalsina",
+  description:
+    "Explore the professional journey of Nischal Timalsina, a Software Developer and Product Designer. Discover his experience in building scalable web applications, design systems, and user-centric digital products.",
+}
 
 export default function Page() {
   return (
@@ -183,7 +190,7 @@ export default function Page() {
               target="_blank"
               rel="noopener noreferrer"
               key={item.name}
-              className="bg-background group size-full space-y-3 rounded-sm p-3"
+              className="bg-background group size-full space-y-3 rounded-sm p-2"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

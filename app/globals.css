@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-
+@plugin '@tailwindcss/typography';
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -122,5 +122,43 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Code block styling */
+  code {
+    counter-reset: line;
+  }
+
+  code[data-line-numbers] > [data-line]::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 1rem;
+    margin-right: 1.5rem;
+    text-align: right;
+    color: theme('colors.muted.foreground');
+    opacity: 0.5;
+  }
+
+  code[data-line-numbers-max-digits="2"] > [data-line]::before {
+    width: 1.5rem;
+  }
+
+  code[data-line-numbers-max-digits="3"] > [data-line]::before {
+    width: 2rem;
+  }
+
+  [data-highlighted-line] {
+    background-color: theme('colors.muted.DEFAULT');
+    border-left: 2px solid theme('colors.primary.DEFAULT');
+    padding-left: 0.75rem;
+    margin-left: -0.75rem;
+  }
+
+  [data-highlighted-chars] {
+    background-color: theme('colors.primary.DEFAULT');
+    color: theme('colors.primary.foreground');
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
   }
 }

@@ -12,7 +12,7 @@ export function Header() {
     toast.success("Email copied to clipboard!")
   }
   return (
-    <header className="fixed top-0 left-0 z-50 w-screen">
+    <nav className="fixed top-0 left-0 z-50 w-screen">
       <div className="mx-auto flex h-full w-full max-w-3xl items-center justify-between p-4 px-4">
         <Link href="/" className="rounded-md p-0.5 backdrop-blur-xs">
           <Logo className="size-7 duration-300 hover:text-orange-500" />
@@ -27,6 +27,6 @@ export function Header() {
           <EnvelopeIcon />
         </Button>
       </div>
-    </header>
+    </nav>
   )
 }
