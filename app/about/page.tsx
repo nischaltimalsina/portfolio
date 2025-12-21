@@ -2,7 +2,7 @@ import { Metadata } from "next"
 import Image from "next/image"
 
 export const metadata: Metadata = {
-  title: "About — Nischal Timalsina",
+  title: "About",
   description:
     "Learn more about Nischal Timalsina, a Software Engineer and product-focused builder working at the intersection of design, engineering, and human-centered thinking. Discover his approach to creating user-centric software that bridges the gap between functionality and usability.",
 }

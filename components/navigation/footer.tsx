@@ -2,7 +2,7 @@ import { ThemeSwitcher } from "../common/theme-switcher"
 
 export function Footer() {
   return (
-    <footer className="fixed bottom-0 left-0 w-screen">
+    <footer className="fixed bottom-0 left-0 w-screen print:hidden">
       <div className="mx-auto flex h-full w-full max-w-3xl items-center justify-between p-4 px-4">
         <div className="rounded-md px-2 py-1 backdrop-blur-xs">
           <p className="text-muted-foreground flex items-center gap-1 text-sm">

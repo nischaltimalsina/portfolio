@@ -1,0 +1,41 @@
+a,
+.link {
+  text-decoration-color: color-mix(
+    in oklab,
+    var(--muted-foreground) 50%,
+    transparent
+  );
+  &:hover {
+    @media (hover: hover) {
+      color: var(--muted-foreground);
+    }
+  }
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  transition-property: all;
+  transition-timing-function: var(
+    --tw-ease,
+    var(--default-transition-timing-function) /* cubic-bezier(0.4, 0, 0.2, 1) */
+  );
+  transition-duration: var(
+    --tw-duration,
+    var(--default-transition-duration) /* 150ms */
+  );
+}
+
+h1 {
+  font-size: var(--text-2xl) /* 1.5rem = 24px */;
+  line-height: var(
+    --tw-leading,
+    var(--text-2xl--line-height) /* calc(2 / 1.5) ≈ 1.333333 */
+  );
+}
+
+h2 {
+  font-size: var(--text-xl) /* 1.25rem = 20px */;
+  line-height: var(
+    --tw-leading,
+    var(--text-xl--line-height) /* calc(1.75 / 1.25) ≈ 1.4 */
+  );
+}

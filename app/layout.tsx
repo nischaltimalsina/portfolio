@@ -116,7 +116,7 @@ export default function RootLayout({
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Header />
-          <ScrollArea className="h-screen">{children}</ScrollArea>
+          {children}
           <Footer />
           <Toaster position="top-center" />
         </ThemeProvider>

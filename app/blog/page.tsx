@@ -5,7 +5,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Blog",
   description:
-    "Thoughts on software development, design, and building products.",
+    "Thoughts on software development, design, and building products. Explore articles by Nischal Timalsina on creating user-centric software that bridges the gap between functionality and usability.",
 }
 
 export default function BlogPage() {
