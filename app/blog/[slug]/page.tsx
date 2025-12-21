@@ -97,7 +97,7 @@ export default async function BlogPost({ params }: Props) {
 
       if (isInline) {
         return (
-          <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-[13px]">
+          <code className="rounded px-1.5 py-0.5 font-mono text-[13px]">
             {children}
           </code>
         )

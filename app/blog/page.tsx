@@ -1,6 +1,6 @@
-import { getAllPosts, getAllTags } from "@/lib/blog"
-import { BlogPageClient } from "@/components/blog/blog-page-client"
 import type { Metadata } from "next"
+import { BlogPageClient } from "@/components/blog/blog-page-client"
+import { getAllPosts, getAllTags } from "@/lib/blog"
 
 export const metadata: Metadata = {
   title: "Blog",

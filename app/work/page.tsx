@@ -113,7 +113,7 @@ const resume = [
   },
   {
     name: "Download my Resume",
-    link: "/api/resume",
+    link: "/assets/Resume:Nischal_Timalsina.pdf",
     status: "Active",
   },
 ]

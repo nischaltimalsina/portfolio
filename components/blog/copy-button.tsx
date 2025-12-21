@@ -1,13 +1,10 @@
 "use client"
 
-import { ButtonProps } from "@base-ui/react"
-import React, { useState } from "react"
+import type { ButtonProps } from "@base-ui/react"
+import { CheckIcon, DocumentDuplicateIcon } from "@heroicons/react/24/outline"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "../ui/button"
-import {
-  DocumentDuplicateIcon,
-  CheckIcon,
-} from "@heroicons/react/24/outline"
 
 export default function CopyButton(props: ButtonProps & { content: string }) {
   const [copied, setCopied] = useState(false)
@@ -28,7 +25,7 @@ export default function CopyButton(props: ButtonProps & { content: string }) {
     <Button
       variant="ghost"
       size="icon-xs"
-      className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100"
+      className="absolute top-2 right-2 transition-opacity group-hover:opacity-100 md:opacity-0"
       onClick={() => handleCopyCode(props.content)}
       aria-label={copied ? "Copied to clipboard" : "Copy code to clipboard"}
     >

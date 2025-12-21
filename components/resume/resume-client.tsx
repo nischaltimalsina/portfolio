@@ -22,7 +22,7 @@ export default function ResumeClient() {
   const contentRef = useRef<HTMLDivElement>(null)
 
   const handleDownloadPdf = () => {
-    window.open("/api/resume", "_blank")
+    window.open("/assets/Resume:Nischal_Timalsina.pdf", "_blank")
   }
 
   return (
