@@ -63,7 +63,7 @@ export const work: ResumeItem[] = [
     company: "E-Signature",
     employmentType: "Full Time",
     duration: "Mar 2023 - May 2024",
-    role: "Senior Frontend Developer",
+    role: "Frontend Developer",
     responsibilities: [
       "Build interactive web and desktop interfaces with React and Electron",
       "Translate product requirements into reliable frontend implementations",

@@ -11,8 +11,8 @@ export async function GET() {
     const page = await browser.newPage()
 
     // Navigate to the resume page
-    const url = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}/resume`
+    const url = process.env.PRODUCTION_URL
+      ? `https://${process.env.PRODUCTION_URL}/resume`
       : "http://localhost:3000/resume"
 
     await page.goto(url, { waitUntil: "networkidle0" })

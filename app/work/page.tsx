@@ -105,6 +105,18 @@ const websites = [
     status: "Archived",
   },
 ]
+const resume = [
+  {
+    name: "Check out my Resume",
+    link: "/resume",
+    status: "Active",
+  },
+  {
+    name: "Download my Resume",
+    link: "/api/resume",
+    status: "Active",
+  },
+]
 
 export const metadata: Metadata = {
   title: "Work — Nischal Timalsina",
@@ -157,6 +169,29 @@ export default function Page() {
         </div>
       </div>
       <div className="mx-auto w-full max-w-3xl p-4">
+        <h1 className="mb-2 text-lg font-semibold">Resume</h1>
+        <div className="bg-accent grid gap-0.5 rounded-md p-0.5 sm:grid-cols-2">
+          {resume.map((item) => (
+            <Link
+              href={item.link}
+              key={item.name}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-background group size-full space-y-3 rounded-sm p-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold group-hover:text-orange-500">
+                    {item.name}
+                  </h3>
+                </div>
+                <ArrowUpRightIcon className="text-muted-foreground size-4 duration-300 group-hover:rotate-45 group-hover:text-orange-500" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-3xl p-4">
         <h1 className="mb-2 text-lg font-semibold">Ventures</h1>
         <div className="bg-accent grid gap-0.5 rounded-md p-0.5 sm:grid-cols-2">
           {ventures.map((item) => (
@@ -181,6 +216,7 @@ export default function Page() {
           ))}
         </div>
       </div>
+
       <div className="mx-auto w-full max-w-3xl p-4">
         <h1 className="mb-2 text-lg font-semibold">Websites</h1>
         <div className="bg-accent grid gap-0.5 rounded-md p-0.5 sm:grid-cols-2">

@@ -107,47 +107,46 @@ export default function ResumeClient() {
               cross-functional design-development workflows.
             </p>
           </div>
-          <hr className="resume-divider print:hidden" />
 
-          <div className="resume-section py-4 print:pt-8">
+          <div className="resume-section py-4">
             <h2 className="resume-section-title text-xl font-normal print:px-0">
               Work Experience
             </h2>
-            <ul className="resume-work-list pt-4">
+            <div className="bg-accent mt-4 space-y-0.5 rounded p-0.5 print:space-y-4 print:bg-transparent">
               {work.map((item) => (
                 <WorkItem key={item.company} {...item} />
               ))}
-            </ul>
+            </div>
           </div>
           <div className="resume-section py-4 print:pt-8">
             <h2 className="resume-section-title text-xl font-normal print:px-0">
               Education
             </h2>
-            <ul className="resume-work-list pt-4">
+            <div className="bg-accent mt-4 space-y-0.5 rounded p-0.5 print:space-y-4 print:bg-transparent">
               {education.map((item) => (
                 <EducationItem key={item.title} {...item} />
               ))}
-            </ul>
+            </div>
           </div>
           <div className="resume-section py-4 print:pt-8">
             <h2 className="resume-section-title text-xl font-normal print:px-0">
               Selected Projects
             </h2>
-            <ul className="resume-work-list pt-4">
+            <div className="bg-accent mt-4 space-y-0.5 rounded p-0.5 print:space-y-4 print:bg-transparent">
               {projects.map((item) => (
                 <ProjectItem key={item.title} {...item} />
               ))}
-            </ul>
+            </div>
           </div>
           <div className="resume-section py-4 print:pt-8">
             <h2 className="resume-section-title text-xl font-normal print:px-0">
               Open Source
             </h2>
-            <ul className="resume-work-list pt-4">
+            <div className="bg-accent mt-4 space-y-0.5 rounded p-0.5 print:space-y-4 print:bg-transparent">
               {openSource.map((item) => (
                 <ProjectItem key={item.title} {...item} />
               ))}
-            </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -157,20 +156,13 @@ export default function ResumeClient() {
 
 function WorkItem(item: ResumeItem) {
   return (
-    <li className="resume-work-item group hover:bg-accent/50 relative grid gap-4 space-y-1 border-b py-4 md:grid-cols-5 print:grid-cols-5 print:border-0 print:px-0 print:py-4">
-      <div className="group-hover:bg-accent/50 absolute -left-4 h-full w-4"></div>
-      <div className="resume-work-meta space-y-1 md:col-span-2 print:col-span-2">
-        <div className="resume-work-role gap flex items-end font-medium">
-          <p className="resume-work-position">
-            {item.role} at {item.company}
-          </p>
+    <div className="bg-background hover:bg-background/30 grid gap-4 rounded-sm p-2 duration-300 md:grid-cols-5 print:grid-cols-5 print:px-0">
+      <div className="md:col-span-2 print:col-span-2">
+        <div className="gap flex items-end font-medium">
+          {item.role} at {item.company}
         </div>
-        <p className="resume-work-duration text-muted-foreground">
-          {item.duration}
-        </p>
-        <p className="resume-work-location text-muted-foreground">
-          {item.location}
-        </p>
+        <p className="text-muted-foreground">{item.duration}</p>
+        <p className="text-muted-foreground">{item.location}</p>
       </div>
 
       <ul className="resume-work-points text-muted-foreground space-y-1.5 md:col-span-3 print:col-span-3">
@@ -180,57 +172,48 @@ function WorkItem(item: ResumeItem) {
           </li>
         ))}
       </ul>
-    </li>
+    </div>
   )
 }
 
 function ProjectItem(item: IProjectItem) {
   return (
-    <li className="resume-work-item group hover:bg-accent/50 relative grid gap-4 space-y-1 border-b py-4 md:grid-cols-5 print:grid-cols-5 print:border-0 print:px-0 print:py-4">
-      <div className="group-hover:bg-accent/50 absolute -left-4 h-full w-4"></div>
-      <a
-        href={item.href}
-        className="resume-work-meta space-y-0.5 md:col-span-2 print:col-span-2"
-      >
-        <p className="resume-work-position decoration-border font-medium underline decoration-dotted underline-offset-4 print:no-underline">
+    <div className="bg-background hover:bg-background/30 grid gap-4 rounded-sm p-2 duration-300 md:grid-cols-5 print:grid-cols-5 print:px-0">
+      <a href={item.href} className="md:col-span-2 print:col-span-2">
+        <p className="decoration-border font-medium underline decoration-dotted underline-offset-4 print:no-underline">
           {item.title}
         </p>
-        <p className="resume-work-duration text-muted-foreground">
-          {item.href.slice(8)}
-        </p>
+        <p className="text-muted-foreground">{item.href.slice(8)}</p>
       </a>
 
-      <ul className="resume-work-points text-muted-foreground space-y-1.5 md:col-span-3 print:col-span-3">
+      <ul className="text-muted-foreground space-y-1.5 md:col-span-3 print:col-span-3">
         {item.description?.map((description) => (
           <li key={description}>
             <p className="resume-work-point text-sm">{description}</p>
           </li>
         ))}
       </ul>
-    </li>
+    </div>
   )
 }
 
 function EducationItem(item: IEducationItem) {
   return (
-    <li className="resume-work-item group hover:bg-accent/50 relative grid gap-4 space-y-1 border-b py-4 md:grid-cols-5 print:grid-cols-5 print:border-0 print:px-0 print:py-4">
-      <div className="group-hover:bg-accent/50 absolute -left-4 h-full w-4"></div>
-      <div className="resume-work-meta space-y-0.5 md:col-span-2 print:col-span-2">
-        <p className="resume-work-position decoration-border font-medium underline decoration-dotted underline-offset-4 print:no-underline">
+    <div className="bg-background hover:bg-background/30 grid gap-4 rounded-sm p-2 duration-300 md:grid-cols-5 print:grid-cols-5 print:px-0">
+      <div className="md:col-span-2 print:col-span-2">
+        <p className="decoration-border font-medium underline decoration-dotted underline-offset-4 print:no-underline">
           {item.title}
         </p>
-        <p className="resume-work-duration text-muted-foreground">
-          {item.location}
-        </p>
+        <p className="text-muted-foreground">{item.location}</p>
       </div>
 
-      <ul className="resume-work-points text-muted-foreground space-y-1.5 md:col-span-3 print:col-span-3">
+      <ul className="text-muted-foreground space-y-1.5 md:col-span-3 print:col-span-3">
         {item.description?.map((description) => (
           <li key={description}>
-            <p className="resume-work-point text-sm">{description}</p>
+            <p className="text-sm">{description}</p>
           </li>
         ))}
       </ul>
-    </li>
+    </div>
   )
 }

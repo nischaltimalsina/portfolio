@@ -75,7 +75,7 @@ export default function Page() {
             src="/assets/pigeons.jpg"
             width={3512}
             height={1975}
-            className="w-full rounded-lg grayscale-50 saturate-50 duration-300 hover:scale-115 hover:grayscale-0 hover:saturate-100"
+            className="w-full rounded-lg duration-300 hover:scale-115"
           />
         </div>
       </div>
